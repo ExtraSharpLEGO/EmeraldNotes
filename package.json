@@ -1,0 +1,65 @@
+{
+  "name": "emeraldnotes",
+  "productName": "EmeraldNotes",
+  "version": "1.0.0",
+  "description": "A beautiful markdown notes application with dark theme, real-time preview, and comprehensive backup system",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "cross-env DEVTOOLS=true electron .",
+    "build": "electron-builder --win",
+    "build:msi": "electron-builder --win --config.win.target=msi",
+    "build:dir": "electron-builder --dir"
+  },
+  "keywords": [
+    "markdown",
+    "notes",
+    "electron",
+    "desktop",
+    "note-taking",
+    "backup",
+    "dark-theme"
+  ],
+  "author": "Peyton Winn",
+  "license": "MIT",
+  "devDependencies": {
+    "cross-env": "^10.1.0",
+    "electron": "^39.1.2",
+    "electron-builder": "^26.0.12"
+  },
+  "dependencies": {
+    "dompurify": "^3.3.0",
+    "jsdom": "^27.2.0",
+    "marked": "^17.0.0"
+  },
+  "build": {
+    "appId": "com.emeraldnotes.app",
+    "productName": "EmeraldNotes",
+    "win": {
+      "target": [
+        {
+          "target": "msi",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png"
+    },
+    "msi": {
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "perMachine": false,
+      "runAfterFinish": true
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "index.html",
+      "styles.css",
+      "assets/**/*",
+      "node_modules/**/*"
+    ]
+  }
+}
