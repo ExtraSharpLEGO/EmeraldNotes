@@ -202,17 +202,65 @@ body {
   text-overflow: ellipsis;
 }
 
-/* Vertical line indicator for nested items */
-.folder-item[style*="padding-left"],
-.file-item[style*="padding-left"] {
+/* Vertical line indicator for nested items - depth specific positioning */
+.folder-item[data-depth]:not([data-depth="0"]),
+.file-item[data-depth]:not([data-depth="0"]) {
   position: relative;
 }
 
-.folder-item[style*="padding-left"]::before,
-.file-item[style*="padding-left"]::before {
+.folder-item[data-depth="1"]::before,
+.file-item[data-depth="1"]::before {
   content: '';
   position: absolute;
   left: 12px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: var(--border-color);
+  opacity: 0.5;
+}
+
+.folder-item[data-depth="2"]::before,
+.file-item[data-depth="2"]::before {
+  content: '';
+  position: absolute;
+  left: 28px; /* 12 + 16 */
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: var(--border-color);
+  opacity: 0.5;
+}
+
+.folder-item[data-depth="3"]::before,
+.file-item[data-depth="3"]::before {
+  content: '';
+  position: absolute;
+  left: 44px; /* 12 + 32 */
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: var(--border-color);
+  opacity: 0.5;
+}
+
+.folder-item[data-depth="4"]::before,
+.file-item[data-depth="4"]::before {
+  content: '';
+  position: absolute;
+  left: 60px; /* 12 + 48 */
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: var(--border-color);
+  opacity: 0.5;
+}
+
+.folder-item[data-depth="5"]::before,
+.file-item[data-depth="5"]::before {
+  content: '';
+  position: absolute;
+  left: 76px; /* 12 + 64 */
   top: 0;
   bottom: 0;
   width: 1px;
