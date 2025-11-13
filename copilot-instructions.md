@@ -70,19 +70,54 @@
 
 ## Critical Bug Fixes
 
-### Checkbox Deletion Bug (FIXED)
+### Code Block Language Dropdown Bug (FIXED - v1.0.1)
+**Problem**: Changing the language dropdown on code blocks would delete the entire file content
+**Root Cause**: Event bubbling - the `change` event was propagating to the preview container, triggering `handlePreviewInput` during the language change operation, which converted the partial/incorrect HTML state to markdown
+**Solution**: 
+1. Added `e.stopPropagation()` and `e.preventDefault()` to the dropdown change handler
+2. Rewrote `updateCodeBlockLanguageInMarkdown()` to use content matching instead of fragile regex
+   - Finds all code blocks in markdown
+   - Matches by trimmed content comparison
+   - Replaces using string concatenation for reliability
+**Location**: `renderer.js` lines ~2380-2460
+**Key Learning**: Always control event propagation on UI control events in contentEditable containers
+
+### Inline Code Cursor Positioning Bug (FIXED - v1.0.1)
+**Problem**: After typing `` `code` ``, cursor would jump to the beginning of the line
+**Root Cause**: No text node existed after the code element for the cursor to rest in when no trailing space/text
+**Solution**: 
+1. Added zero-width space (`\u200B`) after inline code element when no trailing content exists
+2. Updated cursor positioning logic to handle zero-width space node
+3. Zero-width space is automatically removed during `htmlToMarkdown()` conversion
+**Location**: `renderer.js` lines ~1502-1548
+**Result**: Cursor stays outside closing backtick, enabling natural text flow after inline code
+
+### Backup Restore Read-Only Bug (FIXED - v1.0.1)
+**Problem**: After restoring a backup (both individual file and session), all files became read-only and uneditable in both preview and raw markdown modes
+**Root Cause**: Race condition between `alert()` blocking the event loop and the `contentEditable` re-enabling timeout in `openFile()`
+**Attempted Solutions**:
+1. Reordered operations to await `openFile()` before showing alert - insufficient
+2. Increased delay from 100ms to 200ms with explicit contentEditable re-enabling - still failed
+**Final Solution**: Replaced alert dialogs with `location.reload()` to trigger full window reload
+- Individual file restore: `location.reload()` after successful restore
+- Session restore: `location.reload()` after successful restore
+- Provides clean slate with all state properly initialized
+**Location**: `renderer.js` lines ~604-618 (individual) and ~886-902 (session)
+**Key Learning**: `alert()` blocks the JavaScript event loop and can prevent timeouts from executing. For state-sensitive operations, prefer window reload over showing blocking dialogs.
+
+### Checkbox Deletion Bug (FIXED - v1.0.0)
 **Problem**: Checking a checkbox would delete the entire markdown file
 **Root Cause**: `toggleCheckbox()` was reading from `markdownInput.value` (hidden textarea) which was empty
 **Solution**: Changed to `htmlToMarkdown(markdownPreview)` to get content from contentEditable element
 **Location**: `renderer.js` line ~1547-1605
 
-### Timestamp Parsing Bug (FIXED)
+### Timestamp Parsing Bug (FIXED - v1.0.0)
 **Problem**: Session backup timestamps showed 5 hours in the future
 **Root Cause**: ISO timestamp was created without timezone indicator, parsed as local time instead of UTC
 **Solution**: Added 'Z' suffix when parsing timestamp back: `isoTimestamp + 'Z'`
 **Location**: `main.js` handlers for `get-backup-options` and `get-session-backups`
 
-### Nested File Active State Bug (FIXED)
+### Nested File Active State Bug (FIXED - v1.0.0)
 **Problem**: Files in subfolders wouldn't highlight green when selected, only root files would
 **Root Cause**: Windows paths with backslashes (`folder\file.md`) break CSS selectors in `querySelector()`
 **Attempted Fix**: Tried escaping backslashes - didn't work consistently
@@ -415,11 +450,33 @@ removeChildrenOfFolder(folderElement, folderDepth) {
 }
 ```
 
+## Recent Fixes (v1.0.1)
+
+### Event Propagation Pattern
+When adding UI controls inside contentEditable containers:
+1. Always call `e.stopPropagation()` and `e.preventDefault()` on control events
+2. This prevents events from bubbling to the contentEditable's input handler
+3. Example: Language selector dropdown on code blocks
+
+### Zero-Width Space Pattern
+For cursor positioning after inline elements:
+1. Add `\u200B` (zero-width space) after element when no trailing content
+2. Provides invisible text node for cursor placement
+3. Remove during markdown conversion: `text.replace(/\u200B/g, '')`
+4. Enables natural text flow after inline code/formatting
+
+### State Reset Pattern
+When complex state management becomes unreliable:
+1. Consider full page reload: `location.reload()`
+2. Especially after file system operations (restore, move, etc.)
+3. Provides guaranteed clean state vs. partial re-initialization
+4. Trade-off: Slight UX delay for guaranteed correctness
+
 ## Contact & Version
 
-- **Version**: 1.0.0
+- **Version**: 1.0.1
 - **Developer**: Peyton Winn
 - **Last Updated**: January 2025
-- **Framework**: Electron 26.0.12
+- **Framework**: Electron 39.1.2
 - **Status**: Production Ready
 - **Node Version**: Check `package.json` for engine requirements
