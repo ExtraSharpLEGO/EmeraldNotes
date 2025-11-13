@@ -34,3 +34,4 @@ npm-debug.log*
 *.md
 !README.md
 !copilot-instructions.md
+!RELEASE-GUIDE.md
