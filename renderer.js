@@ -4,14 +4,14 @@
 // App State
 let state = {
   basePath: localStorage.getItem('notesBasePath') || null,
-  currentFile: null,
+  currentFile: localStorage.getItem('lastOpenedFile') || null,
   directoryStructure: null,
   saveTimeout: null,
   renderTimeout: null
 };
 
 // Initialize the app
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   console.log('DOM Content Loaded - Initializing app...');
   console.log('marked available:', typeof marked !== 'undefined');
   console.log('DOMPurify available:', typeof DOMPurify !== 'undefined');
@@ -21,7 +21,20 @@ document.addEventListener('DOMContentLoaded', () => {
   setupMenuListeners();
   
   if (state.basePath) {
-    loadDirectory(state.basePath);
+    await loadDirectory(state.basePath);
+    
+    // Restore the last opened file if it exists
+    if (state.currentFile) {
+      // Verify the file still exists before opening it
+      const result = await window.electronAPI.readFile(state.basePath, state.currentFile);
+      if (result.success) {
+        await openFile(state.currentFile);
+      } else {
+        // File no longer exists, clear it
+        state.currentFile = null;
+        localStorage.removeItem('lastOpenedFile');
+      }
+    }
   }
   
   setupMarkdownRenderer();
@@ -31,6 +44,15 @@ document.addEventListener('DOMContentLoaded', () => {
 // Event Listeners
 function setupEventListeners() {
   console.log('Setting up event listeners...');
+  
+  // Home logo - navigate back to home screen
+  const homeLogo = document.getElementById('home-logo');
+  if (homeLogo) {
+    homeLogo.addEventListener('click', () => {
+      console.log('Home logo clicked');
+      navigateToHome();
+    });
+  }
   
   // Directory selection
   const selectDirBtn = document.getElementById('select-dir-btn');
@@ -358,6 +380,9 @@ async function openFile(filePath) {
   
   if (result.success) {
     state.currentFile = filePath;
+    
+    // Save the last opened file to localStorage
+    localStorage.setItem('lastOpenedFile', filePath);
     
     // Update UI - use attribute matching instead of querySelector to avoid escaping issues
     document.querySelectorAll('.file-item').forEach(el => {
@@ -1164,8 +1189,12 @@ async function deleteCurrentNote() {
     
     if (result.success) {
       state.currentFile = null;
+      localStorage.removeItem('lastOpenedFile');
       await loadDirectory(state.basePath);
       hideEditor();
+      
+      // Reload the window to fix read-only bug
+      window.location.reload();
     } else {
       alert('Failed to delete note: ' + result.error);
     }
@@ -2852,8 +2881,12 @@ async function handleContextMenuAction(e) {
       if (result.success) {
         if (state.currentFile === itemPath) {
           state.currentFile = result.newPath;
+          localStorage.setItem('lastOpenedFile', result.newPath);
         }
         await loadDirectory(state.basePath);
+        
+        // Reload the window to fix read-only bug
+        window.location.reload();
       } else {
         alert('Failed to rename: ' + result.error);
       }
@@ -2865,9 +2898,13 @@ async function handleContextMenuAction(e) {
       if (result.success) {
         if (state.currentFile === itemPath) {
           state.currentFile = null;
+          localStorage.removeItem('lastOpenedFile');
           hideEditor();
         }
         await loadDirectory(state.basePath);
+        
+        // Reload the window to fix read-only bug
+        window.location.reload();
       } else {
         alert('Failed to delete: ' + result.error);
       }
@@ -2924,6 +2961,22 @@ function hideEditor() {
   document.getElementById('markdown-input').value = '';
   document.getElementById('markdown-preview').innerHTML = '';
   document.getElementById('note-title').value = '';
+}
+
+function navigateToHome() {
+  // Clear the current file state
+  state.currentFile = null;
+  localStorage.removeItem('lastOpenedFile');
+  
+  // Remove active class from all file items
+  document.querySelectorAll('.file-item').forEach(el => {
+    el.classList.remove('active');
+  });
+  
+  // Hide the editor and show the welcome screen
+  hideEditor();
+  
+  console.log('Navigated to home screen');
 }
 
 function hideWelcomeScreen() {

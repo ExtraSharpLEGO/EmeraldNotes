@@ -110,7 +110,15 @@ function createWindow() {
         { role: 'toggleDevTools' },
         { type: 'separator' },
         { role: 'resetZoom' },
-        { role: 'zoomIn' },
+        { 
+          role: 'zoomIn',
+          accelerator: 'CmdOrCtrl+Plus'
+        },
+        { 
+          role: 'zoomIn',
+          accelerator: 'CmdOrCtrl+=',
+          visible: false
+        },
         { role: 'zoomOut' },
         { type: 'separator' },
         { role: 'togglefullscreen' }

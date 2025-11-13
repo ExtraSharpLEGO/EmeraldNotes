@@ -63,6 +63,22 @@ body {
   color: var(--accent-green);
 }
 
+#home-logo {
+  transition: all 0.2s ease;
+  border-radius: 4px;
+  padding: 2px;
+}
+
+#home-logo:hover {
+  transform: scale(1.1);
+  background-color: var(--bg-hover);
+  box-shadow: 0 0 8px rgba(0, 255, 136, 0.3);
+}
+
+#home-logo:active {
+  transform: scale(0.95);
+}
+
 .header-actions {
   display: flex;
   gap: 8px;
