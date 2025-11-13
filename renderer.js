@@ -604,9 +604,8 @@ function showBackupRestoreModal(options) {
       const result = await window.electronAPI.restoreFromBackup(selectedOption.path, fullPath);
       
       if (result.success) {
-        alert(result.message);
-        // Reload the file to show restored content
-        await openFile(state.currentFile);
+        // Reload the entire window to ensure clean state
+        location.reload();
       } else {
         alert('Failed to restore: ' + result.message);
       }
@@ -882,12 +881,8 @@ async function showSessionRestoreModal() {
       const result = await window.electronAPI.restoreSessionBackup(selectedSession.sessionDir, state.basePath);
       
       if (result.success) {
-        alert(result.message);
-        // Reload directory and current file if open
-        await loadDirectory(state.basePath);
-        if (state.currentFile) {
-          await openFile(state.currentFile);
-        }
+        // Reload the entire window to ensure clean state
+        location.reload();
       } else {
         alert('Failed to restore session: ' + result.message);
       }
@@ -1070,163 +1065,541 @@ function handleMarkdownInput(e) {
 }
 
 function handlePreviewKeydown(e) {
+  // Only handle special cases, let browser handle normal text entry
+  const preview = document.getElementById('markdown-preview');
+  const selection = window.getSelection();
+  
   if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    
-    // Get current selection
-    const selection = window.getSelection();
     if (!selection.rangeCount) return;
     
     const range = selection.getRangeAt(0);
-    const preview = document.getElementById('markdown-preview');
-    
-    // Check if we're inside a table cell - if so, don't handle Enter
     let currentNode = range.startContainer;
-    let tableCell = null;
-    let tempNode = currentNode;
     
+    // Find if we're in a list item
+    let listItem = null;
+    let tempNode = currentNode;
     while (tempNode && tempNode !== preview) {
-      if (tempNode.nodeType === Node.ELEMENT_NODE && 
-          (tempNode.tagName === 'TD' || tempNode.tagName === 'TH')) {
-        tableCell = tempNode;
+      if (tempNode.nodeType === Node.ELEMENT_NODE && tempNode.tagName === 'LI') {
+        listItem = tempNode;
         break;
       }
       tempNode = tempNode.parentNode;
     }
     
-    if (tableCell) {
-      // We're inside a table - allow default behavior (which is to do nothing or add a <br>)
-      // Just insert a <br> without triggering re-render
-      const br = document.createElement('br');
-      range.insertNode(br);
-      range.setStartAfter(br);
-      range.setEndAfter(br);
-      selection.removeAllRanges();
-      selection.addRange(range);
-      return;
+    // Check if we're typing a header - if so, let it transform instead of creating new line
+    if (!listItem) {
+      // Get the current container
+      let container = currentNode;
+      while (container && container !== preview) {
+        if (container.nodeType === Node.ELEMENT_NODE && 
+            (container.tagName === 'P' || container.tagName === 'DIV')) {
+          break;
+        }
+        container = container.parentNode;
+      }
+      
+      if (container && container !== preview) {
+        const text = container.textContent.trim();
+        // Check if this looks like a header pattern
+        if (text.match(/^#{1,6}\s*$/)) {
+          e.preventDefault();
+          // Trigger transformation after a brief delay
+          setTimeout(() => {
+            transformMarkdownPatterns(true);
+          }, 10);
+          return;
+        }
+      }
     }
     
-    // Check if we're in a list item
-    let listItem = null;
+    if (listItem) {
+      e.preventDefault();
+      
+      // Get the text content of the list item (excluding checkbox)
+      const checkbox = listItem.querySelector('input[type="checkbox"]');
+      let textContent = listItem.textContent.trim();
+      
+      // Check if list item is empty
+      if (textContent === '' || (checkbox && textContent === '')) {
+        // Exit the list - insert a paragraph after the list
+        const list = listItem.parentElement;
+        const newPara = document.createElement('p');
+        newPara.innerHTML = '<br>';
+        
+        // Remove the empty list item
+        listItem.remove();
+        
+        // If list is now empty, remove it too
+        if (list.children.length === 0) {
+          list.parentNode.insertBefore(newPara, list.nextSibling);
+          list.remove();
+        } else {
+          list.parentNode.insertBefore(newPara, list.nextSibling);
+        }
+        
+        // Place cursor in new paragraph
+        const newRange = document.createRange();
+        const newSel = window.getSelection();
+        newRange.selectNodeContents(newPara);
+        newRange.collapse(true);
+        newSel.removeAllRanges();
+        newSel.addRange(newRange);
+      } else {
+        // Create new list item after current one
+        const newListItem = document.createElement('li');
+        
+        if (checkbox) {
+          // Create a new checkbox for the new item
+          const newCheckbox = document.createElement('input');
+          newCheckbox.type = 'checkbox';
+          newCheckbox.addEventListener('change', (e) => {
+            setTimeout(() => {
+              preview.dispatchEvent(new Event('input', { bubbles: true }));
+            }, 10);
+          });
+          newListItem.appendChild(newCheckbox);
+          newListItem.appendChild(document.createTextNode(' '));
+        }
+        
+        newListItem.innerHTML += '<br>';
+        listItem.parentNode.insertBefore(newListItem, listItem.nextSibling);
+        
+        // Place cursor in new list item
+        const newRange = document.createRange();
+        const newSel = window.getSelection();
+        const textNode = checkbox ? newListItem.childNodes[2] : newListItem.firstChild;
+        if (textNode) {
+          newRange.setStart(textNode, 0);
+          newRange.collapse(true);
+          newSel.removeAllRanges();
+          newSel.addRange(newRange);
+        }
+      }
+      
+      // Trigger input to save changes
+      preview.dispatchEvent(new Event('input', { bubbles: true }));
+      return;
+    }
+  }
+  
+  // Check for markdown patterns after typing
+  // Trigger on space, enter, backtick, or any other printable character
+  // Don't trigger on modifier keys, arrows, etc.
+  const isPrintableKey = e.key.length === 1 || e.key === ' ' || e.key === 'Enter';
+  if (isPrintableKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    setTimeout(() => {
+      transformMarkdownPatterns(e.key === 'Enter');
+    }, 10);
+  }
+}
+
+function transformMarkdownPatterns(triggeredByEnter = false) {
+  const preview = document.getElementById('markdown-preview');
+  const selection = window.getSelection();
+  if (!selection.rangeCount) return;
+  
+  const range = selection.getRangeAt(0);
+  let currentNode = range.startContainer;
+  
+  // Find the current paragraph or container
+  let container = currentNode;
+  while (container && container !== preview) {
+    if (container.nodeType === Node.ELEMENT_NODE && 
+        (container.tagName === 'P' || container.tagName === 'DIV' || container.tagName === 'PRE')) {
+      break;
+    }
+    container = container.parentNode;
+  }
+  
+  if (!container || container === preview) return;
+  
+  // Don't transform if we're already inside a code block (PRE tag)
+  if (container.tagName === 'PRE') return;
+  
+  // Get the text content of the current line
+  const text = container.textContent;
+  
+  // Save cursor position relative to text
+  const preCaretRange = range.cloneRange();
+  preCaretRange.selectNodeContents(container);
+  preCaretRange.setEnd(range.endContainer, range.endOffset);
+  const cursorOffset = preCaretRange.toString().length;
+  
+  let transformed = false;
+  let newElement = null;
+  let cursorAdjustment = 0;
+  
+  // Check for headings (must be at start of line)
+  // Match if there's a space after # OR if triggered by Enter (new line)
+  const h1Match = triggeredByEnter ? text.match(/^#\s*(.*)$/) : text.match(/^#\s+(.+)$/);
+  const h2Match = triggeredByEnter ? text.match(/^##\s*(.*)$/) : text.match(/^##\s+(.+)$/);
+  const h3Match = triggeredByEnter ? text.match(/^###\s*(.*)$/) : text.match(/^###\s+(.+)$/);
+  const h4Match = triggeredByEnter ? text.match(/^####\s*(.*)$/) : text.match(/^####\s+(.+)$/);
+  const h5Match = triggeredByEnter ? text.match(/^#####\s*(.*)$/) : text.match(/^#####\s+(.+)$/);
+  const h6Match = triggeredByEnter ? text.match(/^######\s*(.*)$/) : text.match(/^######\s+(.+)$/);
+  
+  if (h6Match) {
+    newElement = document.createElement('h6');
+    newElement.textContent = h6Match[1];
+    transformed = true;
+    cursorAdjustment = -7; // "###### "
+  } else if (h5Match) {
+    newElement = document.createElement('h5');
+    newElement.textContent = h5Match[1];
+    transformed = true;
+    cursorAdjustment = -6; // "##### "
+  } else if (h4Match) {
+    newElement = document.createElement('h4');
+    newElement.textContent = h4Match[1];
+    transformed = true;
+    cursorAdjustment = -5; // "#### "
+  } else if (h3Match) {
+    newElement = document.createElement('h3');
+    newElement.textContent = h3Match[1];
+    transformed = true;
+    cursorAdjustment = -4; // "### "
+  } else if (h2Match) {
+    newElement = document.createElement('h2');
+    newElement.textContent = h2Match[1];
+    transformed = true;
+    cursorAdjustment = -3; // "## "
+  } else if (h1Match) {
+    newElement = document.createElement('h1');
+    newElement.textContent = h1Match[1];
+    transformed = true;
+    cursorAdjustment = -2; // "# "
+  }
+  
+  // Check for inline code blocks: ```code``` or ```language code```
+  const inlineCodeBlock = text.match(/^```(\w*)(.*?)```$/);
+  if (inlineCodeBlock && !transformed) {
+    // Complete inline code block - trigger full re-render
+    triggerMarkdownTransform(false);
+    return;
+  }
+  
+  // Check for multi-line code blocks (triple backticks)
+  const codeBlockMatch = text.match(/^```(\w*)\s*$/);
+  if (codeBlockMatch && !transformed) {
+    // Check if we're closing a code block by looking at previous elements
+    let prevElement = container.previousElementSibling;
+    let foundCodeStart = false;
     
-    while (currentNode && currentNode !== preview) {
-      if (currentNode.nodeType === Node.ELEMENT_NODE && currentNode.tagName === 'LI') {
-        listItem = currentNode;
+    while (prevElement && !foundCodeStart) {
+      if (prevElement.getAttribute('data-code-block-start')) {
+        foundCodeStart = true;
         break;
       }
-      currentNode = currentNode.parentNode;
+      prevElement = prevElement.previousElementSibling;
     }
     
-    // Handle list items (bullets and checkboxes)
-    if (listItem) {
-      const checkbox = listItem.querySelector('input[type="checkbox"]');
-      const markdownInput = document.getElementById('markdown-input');
-      const currentMarkdown = markdownInput.value;
-      
-      // Check if the list item is empty (or only has a checkbox)
-      const textContent = listItem.textContent.trim();
-      const isEmpty = textContent === '' || (checkbox && textContent === '');
-      
-      if (isEmpty) {
-        // Exit the list - remove the empty list item
-        const lines = currentMarkdown.split('\n');
-        
-        // Find and remove the last empty list item (bullet or checkbox)
-        for (let i = lines.length - 1; i >= 0; i--) {
-          const line = lines[i].trim();
-          // Match empty bullets or empty checkboxes
-          if (line === '-' || line === '- [ ]' || line === '- []' || line === '-  [ ]') {
-            lines.splice(i, 1);
-            break;
-          }
-          // Stop if we hit a non-empty line
-          if (line !== '') {
-            break;
-          }
-        }
-        
-        // Add two newlines to create a paragraph break
-        markdownInput.value = lines.join('\n') + '\n\n';
-      } else {
-        // Add new list item
-        if (checkbox) {
-          markdownInput.value = currentMarkdown + '\n- [ ] ';
-        } else {
-          markdownInput.value = currentMarkdown + '\n- ';
-        }
-      }
-      
-      // Re-render and place cursor at end
-      setTimeout(() => {
-        renderMarkdownPreview(markdownInput.value, true);
-        preview.focus();
-        
-        if (isEmpty) {
-          // Create a new paragraph for the cursor
-          const newPara = document.createElement('p');
-          const zeroWidthSpace = document.createTextNode('\u200B');
-          newPara.appendChild(zeroWidthSpace);
-          preview.appendChild(newPara);
-          
-          const newRange = document.createRange();
-          const newSel = window.getSelection();
-          newRange.setStart(zeroWidthSpace, 0);
-          newRange.setEnd(zeroWidthSpace, 0);
-          newSel.removeAllRanges();
-          newSel.addRange(newRange);
-        } else {
-          // Place cursor at the very end
-          const newRange = document.createRange();
-          const newSel = window.getSelection();
-          newRange.selectNodeContents(preview);
-          newRange.collapse(false);
-          newSel.removeAllRanges();
-          newSel.addRange(newRange);
-        }
-      }, 10);
-      
+    if (foundCodeStart) {
+      // This is the closing ``` - trigger full re-render to format the code block
+      triggerMarkdownTransform(false);
+      return;
+    } else {
+      // Start of a code block - mark it and wait for closing
+      container.setAttribute('data-code-block-start', codeBlockMatch[1] || '');
       return;
     }
+  }
+  
+  // Check for list patterns at the start of the line
+  // For bullets, require at least one character after "- " BUT exclude '[' and ']' 
+  // to allow typing "- [ ]" without triggering bullet transformation
+  // Match "- " followed by ONE character that's not '[' or ']', then optionally more
+  const bulletMatch = text.match(/^-\s([^\[\]])(.*)$/);
+  const checkboxMatch = text.match(/^-\s\[\s?\]\s/);
+  
+  if ((bulletMatch || checkboxMatch) && !transformed) {
+    // Create a list
+    const list = document.createElement('ul');
+    const listItem = document.createElement('li');
     
-    // For normal text, insert <br>
-    range.deleteContents();
-    
-    const br = document.createElement('br');
-    range.insertNode(br);
-    
-    const textNode = document.createTextNode('\u200B');
-    range.setStartAfter(br);
-    range.insertNode(textNode);
-    
-    range.setStartAfter(textNode);
-    range.setEndAfter(textNode);
-    selection.removeAllRanges();
-    selection.addRange(range);
-    
-    preview.dispatchEvent(new Event('input', { bubbles: true }));
-    
-    // Re-render markdown to transform any markdown syntax
-    setTimeout(() => {
-      const markdownInput = document.getElementById('markdown-input');
-      renderMarkdownPreview(markdownInput.value, true);
+    if (checkboxMatch) {
+      // Create checkbox
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.addEventListener('change', (e) => {
+        setTimeout(() => {
+          preview.dispatchEvent(new Event('input', { bubbles: true }));
+        }, 10);
+      });
+      listItem.appendChild(checkbox);
       
-      preview.focus();
-      
-      // Create a new paragraph at the end for the cursor
-      const newPara = document.createElement('p');
-      const zeroWidthSpace = document.createTextNode('\u200B');
-      newPara.appendChild(zeroWidthSpace);
-      preview.appendChild(newPara);
+      // Add text after the checkbox pattern
+      const remainingText = text.substring(checkboxMatch[0].length);
+      listItem.appendChild(document.createTextNode(' ' + remainingText));
+      cursorAdjustment = -checkboxMatch[0].length;
+    } else {
+      // Add text after the bullet pattern "- "
+      // bulletMatch[1] is the first char, bulletMatch[2] is the rest
+      const remainingText = (bulletMatch[1] || '') + (bulletMatch[2] || '');
+      listItem.appendChild(document.createTextNode(remainingText));
+      // cursorAdjustment accounts for removing "- " (2 characters)
+      cursorAdjustment = -2;
+    }
+    
+    list.appendChild(listItem);
+    newElement = list;
+    transformed = true;
+    
+    // For lists, we need to place cursor in the list item, not the list itself
+    if (newElement) {
+      container.parentNode.replaceChild(newElement, container);
       
       const newRange = document.createRange();
       const newSel = window.getSelection();
       
-      newRange.setStart(zeroWidthSpace, 0);
-      newRange.setEnd(zeroWidthSpace, 0);
+      const textNode = checkboxMatch ? listItem.childNodes[1] : listItem.firstChild;
+      if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+        const newOffset = Math.min(Math.max(0, cursorOffset + cursorAdjustment), textNode.length);
+        newRange.setStart(textNode, newOffset);
+        newRange.collapse(true);
+        newSel.removeAllRanges();
+        newSel.addRange(newRange);
+      }
       
+      preview.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    return;
+  }
+  
+  // Check for tables (pipes with content)
+  // Tables need multiple columns separated by pipes
+  const tableMatch = text.match(/^\|(.+\|)+/);
+  if (tableMatch && !transformed) {
+    // This looks like a table row - trigger a full re-render to properly format
+    const markdownInput = document.getElementById('markdown-input');
+    triggerMarkdownTransform(false);
+    return;
+  }
+  
+  // Check for inline formatting (bold, italic, code)
+  // IMPORTANT: Check for triple backticks BEFORE single backticks
+  // Only transform if there's a space after the closing marker or end of line
+  const boldItalicMatch = text.match(/\*\*\*(.+?)\*\*\*(\s|$)/);
+  const boldMatch = text.match(/\*\*(.+?)\*\*(\s|$)/);
+  const italicMatch = text.match(/\*(.+?)\*(\s|$)/);
+  
+  // Check if text contains triple backticks - if so, DON'T match single backticks yet
+  const hasTripleBackticks = text.includes('```');
+  const inlineCodeMatch = !hasTripleBackticks ? text.match(/`(.+?)`(\s|$)/) : null;
+  
+  if (boldItalicMatch && !transformed) {
+    // Bold and italic
+    const beforeMatch = text.substring(0, text.indexOf(boldItalicMatch[0]));
+    const afterMatch = text.substring(text.indexOf(boldItalicMatch[0]) + boldItalicMatch[0].length);
+    
+    container.innerHTML = '';
+    if (beforeMatch) container.appendChild(document.createTextNode(beforeMatch));
+    
+    const strong = document.createElement('strong');
+    const em = document.createElement('em');
+    em.textContent = boldItalicMatch[1];
+    strong.appendChild(em);
+    container.appendChild(strong);
+    
+    if (boldItalicMatch[2]) container.appendChild(document.createTextNode(boldItalicMatch[2]));
+    if (afterMatch) container.appendChild(document.createTextNode(afterMatch));
+    
+    transformed = true;
+    
+    // Place cursor after the bold-italic element
+    setTimeout(() => {
+      const newRange = document.createRange();
+      const newSel = window.getSelection();
+      
+      if (boldItalicMatch[2] || afterMatch) {
+        const targetNode = boldItalicMatch[2] ? container.childNodes[2] : container.lastChild;
+        if (targetNode && targetNode.nodeType === Node.TEXT_NODE) {
+          newRange.setStart(targetNode, 1); // After the space
+          newRange.collapse(true);
+          newSel.removeAllRanges();
+          newSel.addRange(newRange);
+        }
+      }
+    }, 0);
+    
+    preview.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  } else if (boldMatch && !transformed) {
+    // Bold only
+    const beforeMatch = text.substring(0, text.indexOf(boldMatch[0]));
+    const afterMatch = text.substring(text.indexOf(boldMatch[0]) + boldMatch[0].length);
+    
+    container.innerHTML = '';
+    if (beforeMatch) container.appendChild(document.createTextNode(beforeMatch));
+    
+    const strong = document.createElement('strong');
+    strong.textContent = boldMatch[1];
+    container.appendChild(strong);
+    
+    if (boldMatch[2]) container.appendChild(document.createTextNode(boldMatch[2]));
+    if (afterMatch) container.appendChild(document.createTextNode(afterMatch));
+    
+    transformed = true;
+    
+    // Place cursor after the bold element
+    setTimeout(() => {
+      const newRange = document.createRange();
+      const newSel = window.getSelection();
+      
+      if (boldMatch[2] || afterMatch) {
+        const targetNode = boldMatch[2] ? container.childNodes[2] : container.lastChild;
+        if (targetNode && targetNode.nodeType === Node.TEXT_NODE) {
+          newRange.setStart(targetNode, 1); // After the space
+          newRange.collapse(true);
+          newSel.removeAllRanges();
+          newSel.addRange(newRange);
+        }
+      }
+    }, 0);
+    
+    preview.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  } else if (italicMatch && !transformed && !text.match(/\*\*/)) {
+    // Italic only (make sure it's not part of **)
+    const beforeMatch = text.substring(0, text.indexOf(italicMatch[0]));
+    const afterMatch = text.substring(text.indexOf(italicMatch[0]) + italicMatch[0].length);
+    
+    container.innerHTML = '';
+    if (beforeMatch) container.appendChild(document.createTextNode(beforeMatch));
+    
+    const em = document.createElement('em');
+    em.textContent = italicMatch[1];
+    container.appendChild(em);
+    
+    if (italicMatch[2]) container.appendChild(document.createTextNode(italicMatch[2]));
+    if (afterMatch) container.appendChild(document.createTextNode(afterMatch));
+    
+    transformed = true;
+    
+    // Place cursor after the italic element (where the user just finished typing)
+    setTimeout(() => {
+      const newRange = document.createRange();
+      const newSel = window.getSelection();
+      
+      // If there's text after the match (including the space), place cursor there
+      if (italicMatch[2] || afterMatch) {
+        const targetNode = italicMatch[2] ? container.childNodes[2] : container.lastChild;
+        if (targetNode && targetNode.nodeType === Node.TEXT_NODE) {
+          newRange.setStart(targetNode, 1); // After the space
+          newRange.collapse(true);
+          newSel.removeAllRanges();
+          newSel.addRange(newRange);
+        }
+      }
+    }, 0);
+    
+    preview.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  } else if (inlineCodeMatch && !transformed) {
+    // Inline code
+    const beforeMatch = text.substring(0, text.indexOf(inlineCodeMatch[0]));
+    const afterMatch = text.substring(text.indexOf(inlineCodeMatch[0]) + inlineCodeMatch[0].length);
+    
+    container.innerHTML = '';
+    if (beforeMatch) container.appendChild(document.createTextNode(beforeMatch));
+    
+    const code = document.createElement('code');
+    code.textContent = inlineCodeMatch[1];
+    container.appendChild(code);
+    
+    // Add a zero-width space after code to ensure cursor can be placed outside
+    if (!inlineCodeMatch[2] && !afterMatch) {
+      container.appendChild(document.createTextNode('\u200B'));
+    }
+    
+    if (inlineCodeMatch[2]) container.appendChild(document.createTextNode(inlineCodeMatch[2]));
+    if (afterMatch) container.appendChild(document.createTextNode(afterMatch));
+    
+    transformed = true;
+    
+    // Place cursor after the code element
+    setTimeout(() => {
+      const newRange = document.createRange();
+      const newSel = window.getSelection();
+      
+      if (inlineCodeMatch[2] || afterMatch) {
+        // There's a space or text after the code - place cursor there
+        const targetNode = inlineCodeMatch[2] ? container.childNodes[2] : container.lastChild;
+        if (targetNode && targetNode.nodeType === Node.TEXT_NODE) {
+          newRange.setStart(targetNode, 1); // After the space
+          newRange.collapse(true);
+          newSel.removeAllRanges();
+          newSel.addRange(newRange);
+        }
+      } else {
+        // No space after code - we added a zero-width space, place cursor there
+        // The structure is: [beforeMatch (text)] [code element] [zero-width space]
+        const zeroWidthNode = container.lastChild;
+        if (zeroWidthNode && zeroWidthNode.nodeType === Node.TEXT_NODE) {
+          newRange.setStart(zeroWidthNode, 1); // After the zero-width space
+          newRange.collapse(true);
+          newSel.removeAllRanges();
+          newSel.addRange(newRange);
+        }
+      }
+    }, 0);
+    
+    preview.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+  
+  // If we transformed a heading or other block element, replace and restore cursor
+  if (newElement && !bulletMatch && !checkboxMatch) {
+    container.parentNode.replaceChild(newElement, container);
+    
+    // Restore cursor position
+    const newRange = document.createRange();
+    const newSel = window.getSelection();
+    
+    const textNode = newElement.firstChild;
+    if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+      const newOffset = Math.min(Math.max(0, cursorOffset + cursorAdjustment), textNode.length);
+      newRange.setStart(textNode, newOffset);
+      newRange.collapse(true);
       newSel.removeAllRanges();
       newSel.addRange(newRange);
-    }, 10);
+    }
+    
+    preview.dispatchEvent(new Event('input', { bubbles: true }));
+  } else if (transformed) {
+    // For inline transformations, try to restore cursor position
+    const newRange = document.createRange();
+    const newSel = window.getSelection();
+    
+    // Find the text node closest to our cursor position
+    const walker = document.createTreeWalker(
+      container,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    );
+    
+    let currentOffset = 0;
+    let targetNode = null;
+    let targetOffset = 0;
+    
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      if (currentOffset + node.length >= cursorOffset) {
+        targetNode = node;
+        targetOffset = cursorOffset - currentOffset;
+        break;
+      }
+      currentOffset += node.length;
+    }
+    
+    if (targetNode) {
+      newRange.setStart(targetNode, Math.min(targetOffset, targetNode.length));
+      newRange.collapse(true);
+      newSel.removeAllRanges();
+      newSel.addRange(newRange);
+    }
+    
+    preview.dispatchEvent(new Event('input', { bubbles: true }));
   }
 }
 
@@ -2018,6 +2391,10 @@ function addCodeBlockLanguageSelectors() {
     
     // Handle language change
     select.addEventListener('change', (e) => {
+      // CRITICAL: Stop event propagation to prevent triggering handlePreviewInput
+      e.stopPropagation();
+      e.preventDefault();
+      
       const newLang = e.target.value;
       const codeContent = code.textContent;
       
@@ -2057,29 +2434,36 @@ function updateCodeBlockLanguageInMarkdown(pre, newLang, codeContent) {
   const markdownInput = document.getElementById('markdown-input');
   const currentMarkdown = markdownInput.value;
   
-  // Escape special regex characters in code content
-  const escapedContent = codeContent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Find all code blocks in the markdown
+  const codeBlockRegex = /```(\w*)\n([\s\S]*?)\n```/g;
+  let match;
+  let bestMatch = null;
+  let bestMatchIndex = -1;
   
-  // Try to find and update the code block
-  // Match: ```any-language\ncode\n``` or ```\ncode\n```
-  const patterns = [
-    new RegExp(`\`\`\`\\w*\\n${escapedContent}\\n\`\`\``, 'g'),
-    new RegExp(`\`\`\`\\n${escapedContent}\\n\`\`\``, 'g')
-  ];
-  
-  let updated = false;
-  for (const pattern of patterns) {
-    if (pattern.test(currentMarkdown)) {
-      const langTag = newLang === 'plaintext' ? '' : newLang;
-      const replacement = `\`\`\`${langTag}\n${codeContent}\n\`\`\``;
-      markdownInput.value = currentMarkdown.replace(pattern, replacement);
-      updated = true;
+  // Find the code block that matches our content
+  while ((match = codeBlockRegex.exec(currentMarkdown)) !== null) {
+    const blockContent = match[2];
+    // Compare trimmed content to handle potential whitespace differences
+    if (blockContent.trim() === codeContent.trim()) {
+      bestMatch = match;
+      bestMatchIndex = match.index;
       break;
     }
   }
   
-  if (updated) {
+  if (bestMatch) {
+    const langTag = newLang === 'plaintext' ? '' : newLang;
+    const replacement = `\`\`\`${langTag}\n${bestMatch[2]}\n\`\`\``;
+    
+    // Replace only this specific code block
+    const before = currentMarkdown.substring(0, bestMatchIndex);
+    const after = currentMarkdown.substring(bestMatchIndex + bestMatch[0].length);
+    markdownInput.value = before + replacement + after;
+    
+    // Save the file
     saveCurrentFile(markdownInput.value);
+  } else {
+    console.error('Could not find matching code block in markdown');
   }
 }
 
