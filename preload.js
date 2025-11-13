@@ -10,7 +10,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteItem: (basePath, relativePath) => ipcRenderer.invoke('delete-item', basePath, relativePath),
   renameItem: (basePath, oldPath, newName) => ipcRenderer.invoke('rename-item', basePath, oldPath, newName),
   moveItem: (basePath, itemPath, targetFolderPath, fileName) => ipcRenderer.invoke('move-item', basePath, itemPath, targetFolderPath, fileName),
-  saveImage: (basePath, fileName, base64Data) => ipcRenderer.invoke('save-image', basePath, fileName, base64Data),
+  saveImage: (basePath, fileName, base64Data, currentFilePath) => ipcRenderer.invoke('save-image', basePath, fileName, base64Data, currentFilePath),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   fileNavigatedAway: (basePath, relativePath) => ipcRenderer.invoke('file-navigated-away', basePath, relativePath),
   getBackupOptions: (basePath, relativePath) => ipcRenderer.invoke('get-backup-options', basePath, relativePath),

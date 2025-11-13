@@ -1877,11 +1877,17 @@ async function handleImageInsert(file) {
     reader.onload = async function(e) {
       const base64Data = e.target.result.split(',')[1];
       
-      // Save the image via IPC
-      const result = await window.electronAPI.saveImage(state.basePath, fileName, base64Data);
+      // Save the image via IPC, passing current file path for subfolder support
+      const result = await window.electronAPI.saveImage(
+        state.basePath, 
+        fileName, 
+        base64Data,
+        state.currentFile // Pass current file path so img folder is created in same directory
+      );
       
       if (result.success) {
         // Insert markdown image syntax at cursor
+        // Always use img/ relative to the current file (img folder is in same directory as the markdown file)
         const relativePath = `img/${fileName}`;
         const imageMarkdown = `![${fileName}](${relativePath})`;
         

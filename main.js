@@ -194,8 +194,8 @@ async function createSessionBackup(notesDir) {
     
     const files = await getAllMarkdownFiles(notesDir);
     for (const file of files) {
-      // Skip files in .backups directory
-      if (file.includes('.backups')) continue;
+      // Skip files in .backups and img directories
+      if (file.includes('.backups') || file.includes(path.sep + 'img' + path.sep) || file.endsWith(path.sep + 'img')) continue;
       
       const relativePath = path.relative(notesDir, file);
       const sessionPath = path.join(sessionDir, relativePath);
@@ -243,9 +243,9 @@ async function cleanupOldSessionBackups(backupDir) {
 async function isDirectoryEmpty(dirPath) {
   try {
     const entries = await fs.readdir(dirPath);
-    // Check if there are any .md files (excluding .backups folder)
+    // Check if there are any .md files (excluding .backups and img folders)
     for (const entry of entries) {
-      if (entry === '.backups') continue;
+      if (entry === '.backups' || entry === 'img') continue;
       const fullPath = path.join(dirPath, entry);
       const stat = await fs.stat(fullPath);
       
@@ -372,8 +372,8 @@ async function backupAllFiles(notesDir) {
 
     const files = await getAllMarkdownFiles(notesDir);
     for (const file of files) {
-      // Skip files in .backups directory
-      if (file.includes('.backups')) continue;
+      // Skip files in .backups and img directories
+      if (file.includes('.backups') || file.includes(path.sep + 'img' + path.sep) || file.endsWith(path.sep + 'img')) continue;
       
       const relativePath = path.relative(notesDir, file);
       const backupPath = path.join(backupDir, relativePath);
@@ -399,7 +399,7 @@ async function getAllMarkdownFiles(dir, fileList = []) {
       const filePath = path.join(dir, file);
       const stat = await fs.stat(filePath);
       
-      if (stat.isDirectory() && file !== '.backups') {
+      if (stat.isDirectory() && file !== '.backups' && file !== 'img') {
         await getAllMarkdownFiles(filePath, fileList);
       } else if (file.endsWith('.md')) {
         fileList.push(filePath);
@@ -530,8 +530,8 @@ async function buildDirectoryStructure(dirPath, relativePath = '') {
   };
 
   for (const entry of entries) {
-    // Skip .backups folder
-    if (entry.name === '.backups') {
+    // Skip .backups and img folders
+    if (entry.name === '.backups' || entry.name === 'img') {
       continue;
     }
     
@@ -711,18 +711,38 @@ ipcMain.handle('move-item', async (event, basePath, itemPath, targetFolderPath, 
   }
 });
 
-ipcMain.handle('save-image', async (event, basePath, fileName, base64Data) => {
+ipcMain.handle('save-image', async (event, basePath, fileName, base64Data, currentFilePath = '') => {
   try {
+    // Determine the directory where the img folder should be created
+    // If currentFilePath is provided, create img folder in the same directory as the markdown file
+    let targetDir;
+    if (currentFilePath) {
+      // Get the directory of the current markdown file
+      const fileDir = path.dirname(path.join(basePath, currentFilePath));
+      targetDir = path.join(fileDir, 'img');
+    } else {
+      // Fallback to root img directory for backward compatibility
+      targetDir = path.join(basePath, 'img');
+    }
+    
     // Create img directory if it doesn't exist
-    const imgDir = path.join(basePath, 'img');
-    await fs.mkdir(imgDir, { recursive: true });
+    await fs.mkdir(targetDir, { recursive: true });
     
     // Save the image
-    const filePath = path.join(imgDir, fileName);
+    const filePath = path.join(targetDir, fileName);
     const buffer = Buffer.from(base64Data, 'base64');
     await fs.writeFile(filePath, buffer);
     
-    return { success: true, path: path.join('img', fileName) };
+    // Return relative path from the markdown file to the image
+    let relativePath;
+    if (currentFilePath) {
+      const fileDir = path.dirname(currentFilePath);
+      relativePath = path.join(fileDir, 'img', fileName).replace(/\\/g, '/');
+    } else {
+      relativePath = path.join('img', fileName).replace(/\\/g, '/');
+    }
+    
+    return { success: true, path: relativePath };
   } catch (error) {
     return { success: false, error: error.message };
   }
