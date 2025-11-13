@@ -43,7 +43,7 @@ body {
   display: flex;
   flex-direction: column;
   resize: horizontal;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .sidebar-header {
@@ -127,15 +127,16 @@ body {
 
 /* VS Code style file tree */
 .folder-item, .file-item {
-  padding: 4px 8px;
+  padding: 6px 8px;
+  margin-bottom: 2px;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 6px;
   transition: background-color 0.15s;
   user-select: none;
-  height: 22px;
-  line-height: 22px;
+  height: 28px;
+  line-height: 28px;
 }
 
 .folder-item:hover, .file-item:hover {
@@ -199,6 +200,24 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Vertical line indicator for nested items */
+.folder-item[style*="padding-left"],
+.file-item[style*="padding-left"] {
+  position: relative;
+}
+
+.folder-item[style*="padding-left"]::before,
+.file-item[style*="padding-left"]::before {
+  content: '';
+  position: absolute;
+  left: 12px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: var(--border-color);
+  opacity: 0.5;
 }
 
 /* Main Content */
