@@ -19,5 +19,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   restoreSessionBackup: (sessionDir, notesDir) => ipcRenderer.invoke('restore-session-backup', sessionDir, notesDir),
   showInExplorer: (basePath, relativePath) => ipcRenderer.invoke('show-in-explorer', basePath, relativePath),
   // Menu event listeners
-  onShowSessionRestore: (callback) => ipcRenderer.on('show-session-restore', callback)
+  onShowSessionRestore: (callback) => ipcRenderer.on('show-session-restore', callback),
+  onShowAbout: (callback) => ipcRenderer.on('show-about', callback)
 });

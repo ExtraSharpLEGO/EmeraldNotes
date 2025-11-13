@@ -144,12 +144,7 @@ function createWindow() {
         {
           label: 'About',
           click: () => {
-            dialog.showMessageBox(mainWindow, {
-              type: 'info',
-              title: 'About Markdown Notes',
-              message: 'Markdown Notes App',
-              detail: 'A simple and elegant markdown notes application.\n\nVersion 1.0.0'
-            });
+            mainWindow.webContents.send('show-about');
           }
         }
       ]

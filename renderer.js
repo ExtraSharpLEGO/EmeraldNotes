@@ -630,6 +630,11 @@ function setupMenuListeners() {
   window.electronAPI.onShowSessionRestore(() => {
     showSessionRestoreModal();
   });
+  
+  // Listen for "About" from Help menu
+  window.electronAPI.onShowAbout(() => {
+    showAboutModal();
+  });
 }
 
 // Show Help Menu (legacy, no longer used)
@@ -899,6 +904,256 @@ async function showSessionRestoreModal() {
   
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
+}
+
+// Show About Modal
+function showAboutModal() {
+  // Create overlay
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+  `;
+  
+  // Create modal content
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+    border: 2px solid #4ade80;
+    border-radius: 12px;
+    padding: 32px;
+    max-width: 500px;
+    width: 90%;
+    color: #e0e0e0;
+    box-shadow: 0 10px 40px rgba(74, 222, 128, 0.2);
+  `;
+  
+  // App Icon/Logo
+  const icon = document.createElement('div');
+  icon.innerHTML = '📝';
+  icon.style.cssText = `
+    font-size: 64px;
+    text-align: center;
+    margin-bottom: 16px;
+  `;
+  
+  // App Name
+  const title = document.createElement('h1');
+  title.textContent = 'EmeraldNotes';
+  title.style.cssText = `
+    margin: 0 0 8px 0;
+    color: #4ade80;
+    font-size: 32px;
+    text-align: center;
+    font-weight: bold;
+  `;
+  
+  // Version
+  const version = document.createElement('div');
+  version.textContent = 'Version 1.0.2';
+  version.style.cssText = `
+    text-align: center;
+    color: #a0a0a0;
+    font-size: 14px;
+    margin-bottom: 24px;
+  `;
+  
+  // Description
+  const description = document.createElement('p');
+  description.textContent = 'A beautiful, feature-rich markdown notes application with real-time preview and comprehensive backup system.';
+  description.style.cssText = `
+    margin: 0 0 24px 0;
+    color: #c0c0c0;
+    text-align: center;
+    line-height: 1.6;
+  `;
+  
+  // Divider
+  const divider = document.createElement('hr');
+  divider.style.cssText = `
+    border: none;
+    border-top: 1px solid #3a3a3a;
+    margin: 24px 0;
+  `;
+  
+  // Developer Info
+  const developerSection = document.createElement('div');
+  developerSection.style.cssText = 'margin-bottom: 20px;';
+  
+  const developerLabel = document.createElement('div');
+  developerLabel.textContent = '👨‍💻 Developer';
+  developerLabel.style.cssText = `
+    color: #4ade80;
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+  `;
+  
+  const developerName = document.createElement('div');
+  developerName.textContent = 'Peyton Winn';
+  developerName.style.cssText = `
+    color: #e0e0e0;
+    font-size: 16px;
+  `;
+  
+  developerSection.appendChild(developerLabel);
+  developerSection.appendChild(developerName);
+  
+  // Tech Stack
+  const techSection = document.createElement('div');
+  techSection.style.cssText = 'margin-bottom: 20px;';
+  
+  const techLabel = document.createElement('div');
+  techLabel.textContent = '⚡ Tech Stack';
+  techLabel.style.cssText = `
+    color: #4ade80;
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  `;
+  
+  const techStack = [
+    { name: 'Electron', version: '39.1.2' },
+    { name: 'Marked.js', version: 'Markdown Parser' },
+    { name: 'Highlight.js', version: 'Syntax Highlighting' },
+    { name: 'DOMPurify', version: 'Security' }
+  ];
+  
+  const techList = document.createElement('div');
+  techList.style.cssText = 'display: flex; flex-wrap: wrap; gap: 8px;';
+  
+  techStack.forEach(tech => {
+    const badge = document.createElement('div');
+    badge.style.cssText = `
+      padding: 6px 12px;
+      background: #1a1a1a;
+      border: 1px solid #3a3a3a;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #c0c0c0;
+    `;
+    badge.innerHTML = `<strong style="color: #4ade80;">${tech.name}</strong> <span style="color: #808080;">• ${tech.version}</span>`;
+    techList.appendChild(badge);
+  });
+  
+  techSection.appendChild(techLabel);
+  techSection.appendChild(techList);
+  
+  // Features
+  const featuresSection = document.createElement('div');
+  featuresSection.style.cssText = 'margin-bottom: 24px;';
+  
+  const featuresLabel = document.createElement('div');
+  featuresLabel.textContent = '✨ Key Features';
+  featuresLabel.style.cssText = `
+    color: #4ade80;
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  `;
+  
+  const features = [
+    'Real-time Markdown Preview',
+    'Two-Tier Backup System',
+    'Subfolder Image Support',
+    'Interactive Checkboxes',
+    'Dark Theme with Emerald Accents'
+  ];
+  
+  const featuresList = document.createElement('ul');
+  featuresList.style.cssText = `
+    margin: 0;
+    padding-left: 20px;
+    color: #c0c0c0;
+    font-size: 13px;
+    line-height: 1.8;
+  `;
+  
+  features.forEach(feature => {
+    const li = document.createElement('li');
+    li.textContent = feature;
+    featuresList.appendChild(li);
+  });
+  
+  featuresSection.appendChild(featuresLabel);
+  featuresSection.appendChild(featuresList);
+  
+  // Footer
+  const footer = document.createElement('div');
+  footer.textContent = 'Made with ❤️ for better note-taking';
+  footer.style.cssText = `
+    text-align: center;
+    color: #808080;
+    font-size: 12px;
+    font-style: italic;
+    margin-top: 24px;
+  `;
+  
+  // Close Button
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = 'Close';
+  closeBtn.style.cssText = `
+    width: 100%;
+    margin-top: 24px;
+    padding: 12px;
+    background: #4ade80;
+    color: #000;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    transition: all 0.2s;
+  `;
+  
+  closeBtn.addEventListener('mouseenter', () => {
+    closeBtn.style.background = '#22c55e';
+    closeBtn.style.transform = 'translateY(-1px)';
+  });
+  
+  closeBtn.addEventListener('mouseleave', () => {
+    closeBtn.style.background = '#4ade80';
+    closeBtn.style.transform = 'translateY(0)';
+  });
+  
+  closeBtn.addEventListener('click', () => overlay.remove());
+  
+  // Assemble modal
+  modal.appendChild(icon);
+  modal.appendChild(title);
+  modal.appendChild(version);
+  modal.appendChild(description);
+  modal.appendChild(divider);
+  modal.appendChild(developerSection);
+  modal.appendChild(techSection);
+  modal.appendChild(featuresSection);
+  modal.appendChild(footer);
+  modal.appendChild(closeBtn);
+  
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  
+  // Close on overlay click
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      overlay.remove();
+    }
+  });
 }
 
 async function deleteCurrentNote() {
