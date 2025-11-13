@@ -6,6 +6,39 @@ A beautiful, feature-rich markdown notes application built with Electron. Dark t
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Electron](https://img.shields.io/badge/electron-26.0.12-blue)
 
+## 📥 Download & Installation
+
+### Quick Install (Recommended)
+
+1. **Download** the latest release from [GitHub Releases](https://github.com/ExtraSharpLEGO/EmeraldNotes/releases/latest)
+2. **Download** the `EmeraldNotes-1.0.0.msi` installer file
+3. **Run** the installer by double-clicking the downloaded `.msi` file
+4. **Follow** the installation wizard (no configuration needed!)
+5. **Launch** EmeraldNotes from your Start Menu or Desktop shortcut
+
+> **System Requirements**: Windows 10 or higher • 512 MB RAM • 200 MB disk space
+> 
+> **Note**: The MSI installer is ~106 MB and includes everything you need to run EmeraldNotes.
+
+### Build from Source
+
+Want to contribute or customize? Build it yourself:
+
+```bash
+# Clone the repository
+git clone https://github.com/ExtraSharpLEGO/EmeraldNotes.git
+cd EmeraldNotes
+
+# Install dependencies
+npm install
+
+# Run in development mode
+npm start
+
+# Build MSI installer
+npm run build:msi
+```
+
 ## ✨ Features
 
 ### 📝 Markdown Editor
