@@ -33,5 +33,4 @@ npm-debug.log*
 .backups/
 *.md
 !README.md
-!remind-claude.md
-!SAMPLE_NOTE.md
+!copilot-instructions.md
