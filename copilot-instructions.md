@@ -472,11 +472,101 @@ When complex state management becomes unreliable:
 3. Provides guaranteed clean state vs. partial re-initialization
 4. Trade-off: Slight UX delay for guaranteed correctness
 
+## Recent Changes (v1.0.2)
+
+### Subfolder Image Support Feature
+**Problem**: Images dropped into markdown files in subfolders couldn't be accessed because they were being saved to the root-level `img/` folder, but the relative path `img/image.png` doesn't resolve from subdirectories.
+
+**Example of the Problem**:
+```
+Notes/
+  img/                    ← Root img folder
+    image.png
+  Azure & Infrastructure/
+    notes.md              ← File references img/image.png
+                          ← Can't find ../img/image.png ✗
+```
+
+**Solution**: Images are now saved to an `img/` folder in the same directory as the markdown file being edited.
+
+**Implementation**:
+
+1. **main.js - Enhanced save-image Handler (line ~714)**:
+   - Now accepts 4th parameter: `currentFilePath`
+   - Determines target directory based on current file location
+   - Creates `img` folder adjacent to the markdown file
+   - Returns proper relative path
+   ```javascript
+   ipcMain.handle('save-image', async (event, basePath, fileName, base64Data, currentFilePath = '') => {
+     let targetDir;
+     if (currentFilePath) {
+       const fileDir = path.dirname(path.join(basePath, currentFilePath));
+       targetDir = path.join(fileDir, 'img');
+     } else {
+       targetDir = path.join(basePath, 'img'); // Fallback for backward compatibility
+     }
+     // ... creates folder and saves image
+   });
+   ```
+
+2. **main.js - Hidden img Folders from File Tree**:
+   - **Line 534**: Updated `buildDirectoryStructure()` to skip `img` folders (like `.backups`)
+   - **Line 198**: Session backup skips img directories
+   - **Line 248**: `isDirectoryEmpty()` ignores img folders
+   - **Line 376**: File backup skips img directories
+   - **Line 402**: `getAllMarkdownFiles()` skips img folders
+   ```javascript
+   if (entry.name === '.backups' || entry.name === 'img') {
+     continue; // Skip these folders
+   }
+   ```
+
+3. **renderer.js - Updated handleImageInsert (line ~1879)**:
+   - Now passes `state.currentFile` to the save-image IPC handler
+   - Enables backend to determine correct img folder location
+   ```javascript
+   const result = await window.electronAPI.saveImage(
+     state.basePath, 
+     fileName, 
+     base64Data,
+     state.currentFile // ← New parameter
+   );
+   ```
+
+4. **preload.js - Updated IPC Bridge (line 13)**:
+   - Added 4th parameter to bridge function
+   ```javascript
+   saveImage: (basePath, fileName, base64Data, currentFilePath) => 
+     ipcRenderer.invoke('save-image', basePath, fileName, base64Data, currentFilePath)
+   ```
+
+**Result**:
+```
+Notes/
+  Azure & Infrastructure/
+    notes.md              ← Drops image here
+    img/                  ← Folder created automatically (hidden from tree)
+      image-123.png       ← Image saved here
+  Kubernetes/
+    setup.md              ← Drops image here
+    img/                  ← Separate img folder (hidden from tree)
+      image-456.png       ← Image saved here
+```
+
+**Benefits**:
+- ✅ Images work correctly at any folder depth
+- ✅ `img` folders hidden from file tree (cleaner UI)
+- ✅ Each folder is self-contained with its images
+- ✅ Moving folders keeps images with their markdown files
+- ✅ Backward compatible with existing root-level images
+
+**Key Learning**: When dealing with relative paths in nested folder structures, always calculate paths relative to the current file's location, not the project root.
+
 ## Contact & Version
 
-- **Version**: 1.0.1
+- **Version**: 1.0.2
 - **Developer**: Peyton Winn
-- **Last Updated**: January 2025
+- **Last Updated**: November 2025
 - **Framework**: Electron 39.1.2
 - **Status**: Production Ready
 - **Node Version**: Check `package.json` for engine requirements

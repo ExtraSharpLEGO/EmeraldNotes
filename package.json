@@ -1,7 +1,7 @@
 {
   "name": "emeraldnotes",
   "productName": "EmeraldNotes",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A beautiful markdown notes application with dark theme, real-time preview, and comprehensive backup system",
   "main": "main.js",
   "scripts": {

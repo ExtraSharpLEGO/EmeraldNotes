@@ -2,7 +2,7 @@
 
 A beautiful, feature-rich markdown notes application built with Electron. Dark theme with emerald green accents, real-time preview, and comprehensive backup system.
 
-![Version](https://img.shields.io/badge/version-1.0.1-brightgreen)
+![Version](https://img.shields.io/badge/version-1.0.2-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Electron](https://img.shields.io/badge/electron-39.1.2-blue)
 
@@ -11,7 +11,7 @@ A beautiful, feature-rich markdown notes application built with Electron. Dark t
 ### Quick Install (Recommended)
 
 1. **Download** the latest release from [GitHub Releases](https://github.com/ExtraSharpLEGO/EmeraldNotes/releases/latest)
-2. **Download** the `EmeraldNotes-1.0.1.msi` installer file
+2. **Download** the `EmeraldNotes-1.0.2.msi` installer file
 3. **Run** the installer by double-clicking the downloaded `.msi` file
 4. **Follow** the installation wizard (no configuration needed!)
 5. **Launch** EmeraldNotes from your Start Menu or Desktop shortcut
@@ -251,7 +251,15 @@ Potential future enhancements:
 
 ## 📝 Version History
 
-### v1.0.1 (Current)
+### v1.0.2 (Current)
+- **New Feature**: Subfolder image support - images now work correctly in nested folders
+  - Images are saved to `img/` folder in the same directory as the markdown file
+  - `img` folders are automatically hidden from the file tree (like `.backups`)
+  - Works at any folder depth - root or deeply nested
+  - Backward compatible with existing root-level images
+  - Updated IPC bridge to pass current file path for proper folder creation
+
+### v1.0.1
 - **Fixed**: Code block language dropdown bug - changing language no longer deletes file content
   - Added event propagation prevention on dropdown change events
   - Improved code block matching using content comparison instead of fragile regex
