@@ -2,7 +2,7 @@
 
 A beautiful, feature-rich markdown notes application built with Electron. Dark theme with emerald green accents, real-time preview, and comprehensive backup system.
 
-![Version](https://img.shields.io/badge/version-1.0.2-brightgreen)
+![Version](https://img.shields.io/badge/version-1.0.3-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Electron](https://img.shields.io/badge/electron-39.1.2-blue)
 
