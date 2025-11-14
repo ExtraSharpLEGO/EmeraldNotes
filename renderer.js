@@ -7,7 +7,8 @@ let state = {
   currentFile: localStorage.getItem('lastOpenedFile') || null,
   directoryStructure: null,
   saveTimeout: null,
-  renderTimeout: null
+  renderTimeout: null,
+  ignoreInputCount: 0  // Counter to skip handlePreviewInput during programmatic changes
 };
 
 // Initialize the app
@@ -432,21 +433,58 @@ async function saveCurrentFile(content) {
     return;
   }
   
-  // Safety check: Don't save if content is null, undefined, or empty string
+  // Safety check: Don't save if content is null, undefined
   if (content === null || content === undefined) {
     console.error('Attempted to save null/undefined content, aborting');
+    showErrorModal(
+      'Save Error',
+      'Cannot save file: content is null or undefined. This is likely a bug in the application. Your file was not modified.'
+    );
     return;
   }
   
-  // Allow empty string but warn if trimmed content is empty (file might be intentionally cleared)
-  if (typeof content === 'string' && content.trim().length === 0) {
-    console.warn('Saving file with empty/whitespace-only content');
+  // Additional type checking
+  if (typeof content !== 'string') {
+    console.error('Attempted to save non-string content:', typeof content);
+    showErrorModal(
+      'Save Error',
+      'Cannot save file: content must be a string. This is likely a bug in the application. Your file was not modified.'
+    );
+    return;
+  }
+  
+  // CRITICAL: If file currently has content but we're trying to save empty content, block it
+  // This prevents accidental file wiping from conversion errors
+  const markdownInput = document.getElementById('markdown-input');
+  const currentContent = markdownInput ? markdownInput.value : '';
+  
+  if (currentContent && currentContent.trim().length > 10 && content.trim().length === 0) {
+    console.error('BLOCKED: Attempted to save empty content when file has existing content');
+    showErrorModal(
+      'Save Blocked - Data Protection',
+      'Attempted to save an empty file when your document has content. This could be a conversion error. Your file was not modified. Please report this issue if it persists.'
+    );
+    return;
+  }
+  
+  // If content is suspiciously short (less than 5 chars) and we had more, block it
+  if (currentContent && currentContent.trim().length > 50 && content.trim().length < 5) {
+    console.error('BLOCKED: Attempted to save suspiciously short content');
+    showErrorModal(
+      'Save Blocked - Data Protection',
+      `Attempted to save only ${content.trim().length} characters when your document has ${currentContent.trim().length} characters. This could be a conversion error. Your file was not modified.`
+    );
+    return;
   }
   
   const result = await window.electronAPI.writeFile(state.basePath, state.currentFile, content);
   
   if (!result.success) {
     console.error('Failed to save file:', result.error);
+    showErrorModal(
+      'Save Failed',
+      `Failed to save file: ${result.error}`
+    );
   }
 }
 
@@ -1279,7 +1317,28 @@ function toggleCodeView() {
   if (editorContent.classList.contains('preview-only')) {
     // Switching from preview-only to code view
     // First, convert current preview HTML back to markdown to preserve any edits
-    const currentMarkdown = htmlToMarkdown(markdownPreview);
+    let currentMarkdown;
+    try {
+      currentMarkdown = htmlToMarkdown(markdownPreview);
+      
+      // Validate conversion
+      if (!currentMarkdown && markdownPreview.textContent.trim().length > 0) {
+        console.error('htmlToMarkdown returned empty when switching views');
+        showErrorModal(
+          'View Switch Error',
+          'Failed to convert preview content to markdown. View was not switched to prevent data loss.'
+        );
+        return; // Don't switch views if conversion failed
+      }
+    } catch (error) {
+      console.error('Error converting preview to markdown during view switch:', error);
+      showErrorModal(
+        'View Switch Error',
+        `Failed to switch views: ${error.message}. Your content is safe in preview mode.`
+      );
+      return; // Don't switch views on error
+    }
+    
     markdownInput.value = currentMarkdown;
     
     // Disable editing on preview
@@ -1363,6 +1422,87 @@ function handlePreviewKeydown(e) {
   // Only handle special cases, let browser handle normal text entry
   const preview = document.getElementById('markdown-preview');
   const selection = window.getSelection();
+  
+  // Handle ArrowDown in code blocks - exit if on last line
+  if (e.key === 'ArrowDown') {
+    if (!selection.rangeCount) return;
+    
+    const range = selection.getRangeAt(0);
+    let currentNode = range.startContainer;
+    
+    // Check if we're in a code block
+    let codeBlock = null;
+    let tempNode = currentNode;
+    while (tempNode && tempNode !== preview) {
+      if (tempNode.nodeType === Node.ELEMENT_NODE && tempNode.tagName === 'PRE') {
+        codeBlock = tempNode;
+        break;
+      }
+      tempNode = tempNode.parentNode;
+    }
+    
+    if (codeBlock) {
+      // Get the code element inside pre
+      const codeElement = codeBlock.querySelector('code');
+      if (codeElement) {
+        // Check if cursor is on the last line
+        const codeText = codeElement.textContent;
+        const lines = codeText.split('\n');
+        
+        // Get cursor position in the code
+        let cursorOffset = 0;
+        const preCaretRange = range.cloneRange();
+        preCaretRange.selectNodeContents(codeElement);
+        preCaretRange.setEnd(range.endContainer, range.endOffset);
+        cursorOffset = preCaretRange.toString().length;
+        
+        // Find which line cursor is on
+        let currentLineStart = 0;
+        let currentLineIndex = 0;
+        for (let i = 0; i < lines.length; i++) {
+          const lineEnd = currentLineStart + lines[i].length + (i < lines.length - 1 ? 1 : 0); // +1 for \n
+          if (cursorOffset <= lineEnd) {
+            currentLineIndex = i;
+            break;
+          }
+          currentLineStart = lineEnd;
+        }
+        
+        // If on the last line, exit the code block
+        if (currentLineIndex === lines.length - 1) {
+          e.preventDefault();
+          
+          // Find or create a paragraph after the code block wrapper
+          const codeBlockWrapper = codeBlock.closest('.code-block-wrapper') || codeBlock;
+          let nextElement = codeBlockWrapper.nextElementSibling;
+          
+          if (!nextElement || nextElement.tagName === 'PRE' || nextElement.classList.contains('code-block-wrapper')) {
+            // No paragraph after, create one
+            const newPara = document.createElement('p');
+            newPara.innerHTML = '<br>';
+            
+            // If code block is last element, append to preview, otherwise insert after
+            if (codeBlockWrapper.nextSibling) {
+              codeBlockWrapper.parentNode.insertBefore(newPara, codeBlockWrapper.nextSibling);
+            } else {
+              codeBlockWrapper.parentNode.appendChild(newPara);
+            }
+            nextElement = newPara;
+          }
+          
+          // Move cursor to the next element
+          const newRange = document.createRange();
+          const newSel = window.getSelection();
+          newRange.selectNodeContents(nextElement);
+          newRange.collapse(true);
+          newSel.removeAllRanges();
+          newSel.addRange(newRange);
+          
+          return;
+        }
+      }
+    }
+  }
   
   if (e.key === 'Enter' && !e.shiftKey) {
     if (!selection.rangeCount) return;
@@ -1578,13 +1718,48 @@ function handlePreviewKeydown(e) {
   }
 }
 
+// Safe HTML transformation wrapper - provides rollback on error
+function safeTransformHTML(container, transformFunc) {
+  // Store original content for rollback
+  const originalHTML = container.innerHTML;
+  const originalContent = container.cloneNode(true);
+  
+  try {
+    // Attempt the transformation
+    transformFunc();
+    
+    // Validate that transformation didn't result in empty content unexpectedly
+    if (!container.innerHTML || container.innerHTML.trim().length === 0) {
+      if (originalHTML && originalHTML.trim().length > 0) {
+        console.error('Transformation resulted in empty container, rolling back');
+        container.innerHTML = originalHTML;
+        return false; // Transformation failed
+      }
+    }
+    
+    return true; // Transformation succeeded
+  } catch (error) {
+    console.error('Error during HTML transformation, rolling back:', error);
+    container.innerHTML = originalHTML;
+    showErrorModal(
+      'Formatting Error',
+      `Failed to apply formatting: ${error.message}. Your content has been preserved.`
+    );
+    return false; // Transformation failed
+  }
+}
+
 function transformMarkdownPatterns(triggeredByEnter = false) {
   const preview = document.getElementById('markdown-preview');
   const selection = window.getSelection();
   if (!selection.rangeCount) return;
   
-  const range = selection.getRangeAt(0);
-  let currentNode = range.startContainer;
+  // Store a snapshot of preview content before transformations for emergency rollback
+  const previewSnapshot = preview.innerHTML;
+  
+  try {
+    const range = selection.getRangeAt(0);
+    let currentNode = range.startContainer;
   
   // Find the current paragraph or container
   let container = currentNode;
@@ -1596,7 +1771,28 @@ function transformMarkdownPatterns(triggeredByEnter = false) {
     container = container.parentNode;
   }
   
-  if (!container || container === preview) return;
+  // If cursor is directly in preview (no container), wrap content in a paragraph
+  if (!container || container === preview) {
+    // Check if we're at a text node directly in preview
+    if (currentNode.nodeType === Node.TEXT_NODE && currentNode.parentNode === preview) {
+      // Wrap the text node in a paragraph
+      const para = document.createElement('p');
+      currentNode.parentNode.insertBefore(para, currentNode);
+      para.appendChild(currentNode);
+      container = para;
+      
+      // Restore cursor position
+      const newRange = document.createRange();
+      const newSel = window.getSelection();
+      newRange.setStart(currentNode, range.startOffset);
+      newRange.collapse(true);
+      newSel.removeAllRanges();
+      newSel.addRange(newRange);
+    } else {
+      // Can't find or create container, exit
+      return;
+    }
+  }
   
   // Don't transform if we're already inside a code block (PRE tag)
   if (container.tagName === 'PRE') return;
@@ -2098,6 +2294,31 @@ function transformMarkdownPatterns(triggeredByEnter = false) {
     
     preview.dispatchEvent(new Event('input', { bubbles: true }));
   }
+  
+  } catch (error) {
+    // CRITICAL ERROR HANDLING: If transformation fails, rollback to snapshot
+    console.error('Critical error in transformMarkdownPatterns, rolling back:', error);
+    preview.innerHTML = previewSnapshot;
+    
+    showErrorModal(
+      'Formatting Error',
+      `A critical error occurred while applying markdown formatting: ${error.message}. Your content has been restored to prevent data loss.`
+    );
+    
+    // Restore selection if possible
+    try {
+      const newRange = document.createRange();
+      const newSel = window.getSelection();
+      if (preview.firstChild) {
+        newRange.selectNodeContents(preview.firstChild);
+        newRange.collapse(false);
+        newSel.removeAllRanges();
+        newSel.addRange(newRange);
+      }
+    } catch (selError) {
+      console.error('Could not restore cursor after rollback:', selError);
+    }
+  }
 }
 
 function triggerMarkdownTransform(placeCursorAtEnd = false) {
@@ -2273,6 +2494,13 @@ function triggerMarkdownTransform(placeCursorAtEnd = false) {
 function handlePreviewInput(e) {
   const preview = e.target;
   
+  // Skip if this is a programmatic change (like language dropdown change)
+  if (state.ignoreInputCount > 0) {
+    console.log('Ignoring input event (programmatic change, count:', state.ignoreInputCount, ')');
+    state.ignoreInputCount--;
+    return;
+  }
+  
   // Remove data-cursor-placeholder from any paragraphs that now have content
   const placeholders = preview.querySelectorAll('p[data-cursor-placeholder]');
   placeholders.forEach(p => {
@@ -2283,8 +2511,40 @@ function handlePreviewInput(e) {
     }
   });
   
-  // Convert HTML back to markdown
-  const markdown = htmlToMarkdown(preview);
+  // Convert HTML back to markdown with error handling
+  let markdown;
+  try {
+    markdown = htmlToMarkdown(preview);
+    
+    // Validate the conversion result
+    if (markdown === null || markdown === undefined) {
+      console.error('htmlToMarkdown returned null/undefined');
+      showErrorModal(
+        'Conversion Error',
+        'Failed to convert your edits to markdown format. Your changes were not saved. Please try again or report this issue.'
+      );
+      return; // Don't save corrupted content
+    }
+    
+    // Additional validation: If preview has text content but markdown is empty, something went wrong
+    const previewText = preview.textContent.trim();
+    if (previewText.length > 0 && markdown.trim().length === 0) {
+      console.error('htmlToMarkdown conversion resulted in empty string despite visible content');
+      showErrorModal(
+        'Conversion Error',
+        'Your edits could not be properly converted to markdown. Your changes were not saved. Please try again or report this issue.'
+      );
+      return; // Don't save corrupted content
+    }
+    
+  } catch (error) {
+    console.error('Error in htmlToMarkdown:', error);
+    showErrorModal(
+      'Conversion Error',
+      `An error occurred while converting your edits: ${error.message}. Your changes were not saved.`
+    );
+    return; // Don't save on conversion error
+  }
   
   // Update the hidden textarea
   const markdownInput = document.getElementById('markdown-input');
@@ -2399,7 +2659,29 @@ async function handleImageInsert(file) {
           // Update the markdown textarea
           const preview = document.getElementById('markdown-preview');
           const markdownInput = document.getElementById('markdown-input');
-          const markdown = htmlToMarkdown(preview);
+          
+          let markdown;
+          try {
+            markdown = htmlToMarkdown(preview);
+            
+            // Validate conversion
+            if (!markdown && preview.textContent.trim().length > 0) {
+              console.error('htmlToMarkdown failed after image insertion');
+              showErrorModal(
+                'Image Insertion Error',
+                'Failed to update document after image insertion. Please undo and try again.'
+              );
+              return;
+            }
+          } catch (error) {
+            console.error('Error in htmlToMarkdown after image insertion:', error);
+            showErrorModal(
+              'Image Insertion Error',
+              `Failed to process image insertion: ${error.message}`
+            );
+            return;
+          }
+          
           markdownInput.value = markdown;
           
           // Force re-render to show the image immediately
@@ -2881,6 +3163,13 @@ function addCodeBlockLanguageSelectors() {
     const select = document.createElement('select');
     select.className = 'language-dropdown';
     
+    // Prevent ALL events from the select from bubbling to preview
+    ['click', 'mousedown', 'mouseup', 'focus', 'blur', 'input'].forEach(eventType => {
+      select.addEventListener(eventType, (e) => {
+        e.stopPropagation();
+      });
+    });
+    
     // Add language options
     languages.forEach(lang => {
       const option = document.createElement('option');
@@ -2897,6 +3186,18 @@ function addCodeBlockLanguageSelectors() {
       // CRITICAL: Stop event propagation to prevent triggering handlePreviewInput
       e.stopPropagation();
       e.preventDefault();
+      
+      // Increment counter to ignore multiple input events during this operation
+      state.ignoreInputCount += 3;  // Increased to handle delayed events
+      console.log('Language change: set ignoreInputCount to', state.ignoreInputCount);
+      
+      // Safety: reset counter after 2 seconds (some events fire late)
+      setTimeout(() => {
+        if (state.ignoreInputCount > 0) {
+          console.log('Safety reset: clearing ignoreInputCount (was', state.ignoreInputCount, ')');
+          state.ignoreInputCount = 0;
+        }
+      }, 2000);
       
       const newLang = e.target.value;
       const codeContent = code.textContent;
@@ -2980,7 +3281,7 @@ function updateCodeBlockLanguageInMarkdown(pre, newLang, codeContent) {
       
       markdownInput.value = newMarkdown;
       
-      // Save the file
+      // Save the file (ignore input events are already blocked by the change handler)
       saveCurrentFile(newMarkdown);
       return true;
     } else {
@@ -3183,6 +3484,81 @@ function handleModalConfirm() {
   }
   
   hideModal();
+}
+
+// Error modal for displaying errors without user input
+function showErrorModal(title, message) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+  `;
+
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    background: #2b2b2b;
+    border-radius: 8px;
+    padding: 24px;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  `;
+
+  const titleEl = document.createElement('h3');
+  titleEl.textContent = title;
+  titleEl.style.cssText = `
+    color: #ff6b6b;
+    margin: 0 0 16px 0;
+    font-size: 18px;
+  `;
+
+  const messageEl = document.createElement('p');
+  messageEl.textContent = message;
+  messageEl.style.cssText = `
+    color: #e0e0e0;
+    margin: 0 0 24px 0;
+    line-height: 1.5;
+  `;
+
+  const buttonContainer = document.createElement('div');
+  buttonContainer.style.cssText = `
+    display: flex;
+    justify-content: flex-end;
+  `;
+
+  const okButton = document.createElement('button');
+  okButton.textContent = 'OK';
+  okButton.style.cssText = `
+    background: #6366f1;
+    color: white;
+    border: none;
+    padding: 8px 24px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+  `;
+  okButton.addEventListener('click', () => {
+    document.body.removeChild(overlay);
+  });
+
+  buttonContainer.appendChild(okButton);
+  modal.appendChild(titleEl);
+  modal.appendChild(messageEl);
+  modal.appendChild(buttonContainer);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  // Focus the OK button
+  okButton.focus();
 }
 
 // UI Helpers
