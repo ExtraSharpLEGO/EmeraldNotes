@@ -428,8 +428,19 @@ async function openFile(filePath) {
 }
 
 async function saveCurrentFile(content) {
-  if (!state.currentFile || !content) {
+  if (!state.currentFile) {
     return;
+  }
+  
+  // Safety check: Don't save if content is null, undefined, or empty string
+  if (content === null || content === undefined) {
+    console.error('Attempted to save null/undefined content, aborting');
+    return;
+  }
+  
+  // Allow empty string but warn if trimmed content is empty (file might be intentionally cleared)
+  if (typeof content === 'string' && content.trim().length === 0) {
+    console.warn('Saving file with empty/whitespace-only content');
   }
   
   const result = await window.electronAPI.writeFile(state.basePath, state.currentFile, content);
@@ -1393,6 +1404,15 @@ function handlePreviewKeydown(e) {
           }, 10);
           return;
         }
+        // Check if this looks like a horizontal rule pattern
+        if (text.match(/^---$/)) {
+          e.preventDefault();
+          // Trigger transformation after a brief delay
+          setTimeout(() => {
+            transformMarkdownPatterns(true);
+          }, 10);
+          return;
+        }
       }
     }
     
@@ -1458,6 +1478,87 @@ function handlePreviewKeydown(e) {
           newSel.removeAllRanges();
           newSel.addRange(newRange);
         }
+      }
+      
+      // Trigger input to save changes
+      preview.dispatchEvent(new Event('input', { bubbles: true }));
+      return;
+    }
+    
+    // Check if we're in a blockquote
+    let blockquote = null;
+    tempNode = currentNode;
+    while (tempNode && tempNode !== preview) {
+      if (tempNode.nodeType === Node.ELEMENT_NODE && tempNode.tagName === 'BLOCKQUOTE') {
+        blockquote = tempNode;
+        break;
+      }
+      tempNode = tempNode.parentNode;
+    }
+    
+    if (blockquote) {
+      e.preventDefault();
+      
+      // Get the current paragraph within the blockquote
+      let currentPara = currentNode;
+      while (currentPara && currentPara !== blockquote) {
+        if (currentPara.nodeType === Node.ELEMENT_NODE && currentPara.tagName === 'P') {
+          break;
+        }
+        currentPara = currentPara.parentNode;
+      }
+      
+      if (!currentPara || currentPara === blockquote) {
+        // Fallback: create paragraph in blockquote
+        currentPara = document.createElement('p');
+        blockquote.appendChild(currentPara);
+      }
+      
+      const textContent = currentPara.textContent.trim();
+      
+      // Check if current paragraph is empty
+      if (textContent === '') {
+        // Exit the blockquote - insert a paragraph after it
+        const newPara = document.createElement('p');
+        newPara.innerHTML = '<br>';
+        
+        // Remove the empty paragraph
+        currentPara.remove();
+        
+        // If blockquote is now empty, remove it too
+        if (blockquote.children.length === 0 || blockquote.textContent.trim() === '') {
+          blockquote.parentNode.insertBefore(newPara, blockquote.nextSibling);
+          blockquote.remove();
+        } else {
+          blockquote.parentNode.insertBefore(newPara, blockquote.nextSibling);
+        }
+        
+        // Place cursor in new paragraph
+        const newRange = document.createRange();
+        const newSel = window.getSelection();
+        newRange.selectNodeContents(newPara);
+        newRange.collapse(true);
+        newSel.removeAllRanges();
+        newSel.addRange(newRange);
+      } else {
+        // Create new paragraph in blockquote
+        const newPara = document.createElement('p');
+        newPara.innerHTML = '<br>';
+        
+        // Insert after current paragraph
+        if (currentPara.nextSibling) {
+          blockquote.insertBefore(newPara, currentPara.nextSibling);
+        } else {
+          blockquote.appendChild(newPara);
+        }
+        
+        // Place cursor in new paragraph
+        const newRange = document.createRange();
+        const newSel = window.getSelection();
+        newRange.selectNodeContents(newPara);
+        newRange.collapse(true);
+        newSel.removeAllRanges();
+        newSel.addRange(newRange);
       }
       
       // Trigger input to save changes
@@ -1552,6 +1653,29 @@ function transformMarkdownPatterns(triggeredByEnter = false) {
     newElement.textContent = h1Match[1];
     transformed = true;
     cursorAdjustment = -2; // "# "
+  }
+  
+  // Check for horizontal rule (---) 
+  // Match "---" at the start when Enter is pressed
+  const hrMatch = text.match(/^---\s*$/);
+  if (hrMatch && !transformed) {
+    newElement = document.createElement('hr');
+    const nextPara = document.createElement('p');
+    nextPara.innerHTML = '<br>';
+    
+    container.parentNode.replaceChild(newElement, container);
+    newElement.parentNode.insertBefore(nextPara, newElement.nextSibling);
+    
+    // Place cursor in the new paragraph after the hr
+    const newRange = document.createRange();
+    const newSel = window.getSelection();
+    newRange.selectNodeContents(nextPara);
+    newRange.collapse(true);
+    newSel.removeAllRanges();
+    newSel.addRange(newRange);
+    
+    preview.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
   }
   
   // Check for inline code blocks: ```code``` or ```language code```
@@ -1649,6 +1773,54 @@ function transformMarkdownPatterns(triggeredByEnter = false) {
     return;
   }
   
+  // Check for blockquote pattern at the start of the line
+  // Match "> " followed by any content (or nothing if triggered by Enter)
+  const blockquoteMatch = text.match(/^>\s(.*)$/);
+  
+  if (blockquoteMatch && !transformed) {
+    // Create a blockquote
+    const blockquote = document.createElement('blockquote');
+    const para = document.createElement('p');
+    
+    // Add text after the "> " pattern
+    const remainingText = blockquoteMatch[1];
+    if (remainingText) {
+      para.textContent = remainingText;
+    } else {
+      para.innerHTML = '<br>';
+    }
+    
+    blockquote.appendChild(para);
+    newElement = blockquote;
+    transformed = true;
+    cursorAdjustment = -2; // "> "
+    
+    // Replace container with blockquote
+    container.parentNode.replaceChild(newElement, container);
+    
+    // Place cursor in the paragraph inside the blockquote
+    const newRange = document.createRange();
+    const newSel = window.getSelection();
+    
+    const textNode = para.firstChild;
+    if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+      const newOffset = Math.min(Math.max(0, cursorOffset + cursorAdjustment), textNode.length);
+      newRange.setStart(textNode, newOffset);
+      newRange.collapse(true);
+      newSel.removeAllRanges();
+      newSel.addRange(newRange);
+    } else {
+      // If it's a BR, place cursor at the start of the paragraph
+      newRange.selectNodeContents(para);
+      newRange.collapse(true);
+      newSel.removeAllRanges();
+      newSel.addRange(newRange);
+    }
+    
+    preview.dispatchEvent(new Event('input', { bubbles: true }));
+    return;
+  }
+  
   // Check for tables (pipes with content)
   // Tables need multiple columns separated by pipes
   const tableMatch = text.match(/^\|(.+\|)+/);
@@ -1660,11 +1832,26 @@ function transformMarkdownPatterns(triggeredByEnter = false) {
   }
   
   // Check for inline formatting (bold, italic, code)
-  // IMPORTANT: Check for triple backticks BEFORE single backticks
+  // IMPORTANT: Check the starting pattern to determine which to match
+  // This prevents ***test** from matching as bold instead of waiting for bold-italic
   // Only transform if there's a space after the closing marker or end of line
-  const boldItalicMatch = text.match(/\*\*\*(.+?)\*\*\*(\s|$)/);
-  const boldMatch = text.match(/\*\*(.+?)\*\*(\s|$)/);
-  const italicMatch = text.match(/\*(.+?)\*(\s|$)/);
+  
+  // First, check what pattern we're starting with
+  let boldItalicMatch = null;
+  let boldMatch = null;
+  let italicMatch = null;
+  
+  // Determine which pattern to match based on the opening
+  if (text.includes('***')) {
+    // If text has ***, only match bold-italic (don't let ** or * match first)
+    boldItalicMatch = text.match(/\*\*\*(.+?)\*\*\*(\s|$)/);
+  } else if (text.includes('**')) {
+    // If text has ** but not ***, only match bold (don't let * match first)
+    boldMatch = text.match(/\*\*(.+?)\*\*(\s|$)/);
+  } else if (text.includes('*')) {
+    // Only if we have single *, match italic
+    italicMatch = text.match(/\*(.+?)\*(\s|$)/);
+  }
   
   // Check if text contains triple backticks - if so, DON'T match single backticks yet
   const hasTripleBackticks = text.includes('```');
@@ -1694,14 +1881,23 @@ function transformMarkdownPatterns(triggeredByEnter = false) {
       const newRange = document.createRange();
       const newSel = window.getSelection();
       
-      if (boldItalicMatch[2] || afterMatch) {
-        const targetNode = boldItalicMatch[2] ? container.childNodes[2] : container.lastChild;
-        if (targetNode && targetNode.nodeType === Node.TEXT_NODE) {
-          newRange.setStart(targetNode, 1); // After the space
+      // Place cursor after the <strong><em> element
+      const strongElement = container.querySelector('strong');
+      if (strongElement && strongElement.nextSibling) {
+        // If there's a text node after, place cursor at its start
+        const nextNode = strongElement.nextSibling;
+        if (nextNode.nodeType === Node.TEXT_NODE) {
+          newRange.setStart(nextNode, 0);
           newRange.collapse(true);
           newSel.removeAllRanges();
           newSel.addRange(newRange);
         }
+      } else if (strongElement) {
+        // If no next sibling, place cursor right after the strong element
+        newRange.setStartAfter(strongElement);
+        newRange.collapse(true);
+        newSel.removeAllRanges();
+        newSel.addRange(newRange);
       }
     }, 0);
     
@@ -1729,21 +1925,30 @@ function transformMarkdownPatterns(triggeredByEnter = false) {
       const newRange = document.createRange();
       const newSel = window.getSelection();
       
-      if (boldMatch[2] || afterMatch) {
-        const targetNode = boldMatch[2] ? container.childNodes[2] : container.lastChild;
-        if (targetNode && targetNode.nodeType === Node.TEXT_NODE) {
-          newRange.setStart(targetNode, 1); // After the space
+      // Place cursor after the <strong> element
+      const strongElement = container.querySelector('strong');
+      if (strongElement && strongElement.nextSibling) {
+        // If there's a text node after, place cursor at its start
+        const nextNode = strongElement.nextSibling;
+        if (nextNode.nodeType === Node.TEXT_NODE) {
+          newRange.setStart(nextNode, 0);
           newRange.collapse(true);
           newSel.removeAllRanges();
           newSel.addRange(newRange);
         }
+      } else if (strongElement) {
+        // If no next sibling, place cursor right after the strong element
+        newRange.setStartAfter(strongElement);
+        newRange.collapse(true);
+        newSel.removeAllRanges();
+        newSel.addRange(newRange);
       }
     }, 0);
     
     preview.dispatchEvent(new Event('input', { bubbles: true }));
     return;
-  } else if (italicMatch && !transformed && !text.match(/\*\*/)) {
-    // Italic only (make sure it's not part of **)
+  } else if (italicMatch && !transformed) {
+    // Italic only
     const beforeMatch = text.substring(0, text.indexOf(italicMatch[0]));
     const afterMatch = text.substring(text.indexOf(italicMatch[0]) + italicMatch[0].length);
     
@@ -1759,20 +1964,28 @@ function transformMarkdownPatterns(triggeredByEnter = false) {
     
     transformed = true;
     
-    // Place cursor after the italic element (where the user just finished typing)
+    // Place cursor after the italic element
     setTimeout(() => {
       const newRange = document.createRange();
       const newSel = window.getSelection();
       
-      // If there's text after the match (including the space), place cursor there
-      if (italicMatch[2] || afterMatch) {
-        const targetNode = italicMatch[2] ? container.childNodes[2] : container.lastChild;
-        if (targetNode && targetNode.nodeType === Node.TEXT_NODE) {
-          newRange.setStart(targetNode, 1); // After the space
+      // Place cursor after the <em> element
+      const emElement = container.querySelector('em');
+      if (emElement && emElement.nextSibling) {
+        // If there's a text node after, place cursor at its start
+        const nextNode = emElement.nextSibling;
+        if (nextNode.nodeType === Node.TEXT_NODE) {
+          newRange.setStart(nextNode, 0);
           newRange.collapse(true);
           newSel.removeAllRanges();
           newSel.addRange(newRange);
         }
+      } else if (emElement) {
+        // If no next sibling, place cursor right after the em element
+        newRange.setStartAfter(emElement);
+        newRange.collapse(true);
+        newSel.removeAllRanges();
+        newSel.addRange(newRange);
       }
     }, 0);
     
@@ -2710,8 +2923,11 @@ function addCodeBlockLanguageSelectors() {
         }
       }
       
-      // Update markdown source
-      updateCodeBlockLanguageInMarkdown(pre, newLang, codeContent);
+      // Update markdown source - only save if successful
+      const success = updateCodeBlockLanguageInMarkdown(pre, newLang, codeContent);
+      if (!success) {
+        console.warn('Failed to update markdown for language change, file not modified');
+      }
     });
     
     selector.appendChild(select);
@@ -2721,39 +2937,59 @@ function addCodeBlockLanguageSelectors() {
 
 // Update markdown source when language changes
 function updateCodeBlockLanguageInMarkdown(pre, newLang, codeContent) {
-  const markdownInput = document.getElementById('markdown-input');
-  const currentMarkdown = markdownInput.value;
-  
-  // Find all code blocks in the markdown
-  const codeBlockRegex = /```(\w*)\n([\s\S]*?)\n```/g;
-  let match;
-  let bestMatch = null;
-  let bestMatchIndex = -1;
-  
-  // Find the code block that matches our content
-  while ((match = codeBlockRegex.exec(currentMarkdown)) !== null) {
-    const blockContent = match[2];
-    // Compare trimmed content to handle potential whitespace differences
-    if (blockContent.trim() === codeContent.trim()) {
-      bestMatch = match;
-      bestMatchIndex = match.index;
-      break;
+  try {
+    const markdownInput = document.getElementById('markdown-input');
+    if (!markdownInput || !markdownInput.value) {
+      console.warn('No markdown input or empty value, skipping language update');
+      return false;
     }
-  }
-  
-  if (bestMatch) {
-    const langTag = newLang === 'plaintext' ? '' : newLang;
-    const replacement = `\`\`\`${langTag}\n${bestMatch[2]}\n\`\`\``;
     
-    // Replace only this specific code block
-    const before = currentMarkdown.substring(0, bestMatchIndex);
-    const after = currentMarkdown.substring(bestMatchIndex + bestMatch[0].length);
-    markdownInput.value = before + replacement + after;
+    const currentMarkdown = markdownInput.value;
     
-    // Save the file
-    saveCurrentFile(markdownInput.value);
-  } else {
-    console.error('Could not find matching code block in markdown');
+    // Find all code blocks in the markdown
+    const codeBlockRegex = /```(\w*)\n([\s\S]*?)\n```/g;
+    let match;
+    let bestMatch = null;
+    let bestMatchIndex = -1;
+    
+    // Find the code block that matches our content
+    while ((match = codeBlockRegex.exec(currentMarkdown)) !== null) {
+      const blockContent = match[2];
+      // Compare trimmed content to handle potential whitespace differences
+      if (blockContent.trim() === codeContent.trim()) {
+        bestMatch = match;
+        bestMatchIndex = match.index;
+        break;
+      }
+    }
+    
+    if (bestMatch) {
+      const langTag = newLang === 'plaintext' ? '' : newLang;
+      const replacement = `\`\`\`${langTag}\n${bestMatch[2]}\n\`\`\``;
+      
+      // Replace only this specific code block
+      const before = currentMarkdown.substring(0, bestMatchIndex);
+      const after = currentMarkdown.substring(bestMatchIndex + bestMatch[0].length);
+      const newMarkdown = before + replacement + after;
+      
+      // Verify the new markdown is not empty
+      if (newMarkdown.trim().length === 0) {
+        console.error('Language update would result in empty content, aborting');
+        return false;
+      }
+      
+      markdownInput.value = newMarkdown;
+      
+      // Save the file
+      saveCurrentFile(newMarkdown);
+      return true;
+    } else {
+      console.error('Could not find matching code block in markdown');
+      return false;
+    }
+  } catch (error) {
+    console.error('Error updating code block language:', error);
+    return false;
   }
 }
 
