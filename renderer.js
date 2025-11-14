@@ -3311,8 +3311,16 @@ function attachCheckboxListeners() {
     const newCheckbox = preview.querySelectorAll('input[type="checkbox"]')[index];
     newCheckbox.dataset.checkboxIndex = index;
     
+    // Stop ALL events from bubbling to preview (prevents triggering handlePreviewInput)
+    ['click', 'mousedown', 'mouseup', 'focus', 'blur', 'input', 'change'].forEach(eventType => {
+      newCheckbox.addEventListener(eventType, (e) => {
+        e.stopPropagation();
+      });
+    });
+    
     // Add change event listener
     newCheckbox.addEventListener('change', function(e) {
+      e.stopPropagation(); // Extra safety
       toggleCheckbox(this);
     });
     
