@@ -1033,7 +1033,7 @@ function showAboutModal() {
   
   // Version
   const version = document.createElement('div');
-  version.textContent = 'Version 1.0.2';
+  version.textContent = 'Version 1.0.3';
   version.style.cssText = `
     text-align: center;
     color: #a0a0a0;

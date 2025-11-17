@@ -9,6 +9,9 @@
     "dev": "cross-env DEVTOOLS=true electron .",
     "build": "electron-builder --win",
     "build:msi": "electron-builder --win --config.win.target=msi",
+    "build:mac": "electron-builder --mac",
+    "build:mac:dmg": "electron-builder --mac --config.mac.target=dmg",
+    "build:all": "electron-builder --win --mac",
     "build:dir": "electron-builder --dir"
   },
   "keywords": [
@@ -51,6 +54,43 @@
       "createStartMenuShortcut": true,
       "perMachine": false,
       "runAfterFinish": true
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "title": "EmeraldNotes ${version}",
+      "backgroundColor": "#1a1a1a",
+      "window": {
+        "width": 540,
+        "height": 380
+      }
     },
     "files": [
       "main.js",

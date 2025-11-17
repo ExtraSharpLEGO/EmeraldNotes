@@ -28,6 +28,19 @@ npm-debug.log*
 *.tmp
 .cache/
 
+# Build artifacts
+*.dmg
+*.pkg
+*.app
+*.msi
+*.exe
+build/release/
+
+# Code signing
+*.p12
+*.cer
+*.certSigningRequest
+
 # User data (for development/testing)
 # Remove these lines if you want to commit your test notes
 .backups/
@@ -35,3 +48,10 @@ npm-debug.log*
 !README.md
 !copilot-instructions.md
 !RELEASE-GUIDE.md
+!BUILD_GUIDE.md
+!MACOS_BUILD_SUMMARY.md
+!STABILITY_AUDIT_AND_FIXES.md
+!DATA_LOSS_PREVENTION_GUIDE.md
+!CODE_BLOCK_LANGUAGE_FIX.md
+!DROPDOWN_FIX_V2.md
+!FIRST_LINE_FIX.md

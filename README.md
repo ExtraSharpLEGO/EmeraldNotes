@@ -10,15 +10,24 @@ A beautiful, feature-rich markdown notes application built with Electron. Dark t
 
 ### Quick Install (Recommended)
 
+#### Windows
 1. **Download** the latest release from [GitHub Releases](https://github.com/ExtraSharpLEGO/EmeraldNotes/releases/latest)
-2. **Download** the `EmeraldNotes-1.0.2.msi` installer file
+2. **Download** the `EmeraldNotes-1.0.3.msi` installer file
 3. **Run** the installer by double-clicking the downloaded `.msi` file
 4. **Follow** the installation wizard (no configuration needed!)
 5. **Launch** EmeraldNotes from your Start Menu or Desktop shortcut
 
-> **System Requirements**: Windows 10 or higher • 512 MB RAM • 200 MB disk space
+#### macOS
+1. **Download** the latest release from [GitHub Releases](https://github.com/ExtraSharpLEGO/EmeraldNotes/releases/latest)
+2. **Download** the `EmeraldNotes-1.0.3.dmg` installer file
+3. **Open** the DMG file and drag EmeraldNotes to your Applications folder
+4. **Launch** EmeraldNotes from your Applications folder or Launchpad
+
+> **System Requirements**: 
+> - Windows 10 or higher • 512 MB RAM • 200 MB disk space
+> - macOS 10.13 (High Sierra) or higher • Apple Silicon & Intel Macs supported
 > 
-> **Note**: The MSI installer is ~106 MB and includes everything you need to run EmeraldNotes.
+> **Note**: The installers are ~100-200 MB and include everything you need to run EmeraldNotes.
 
 ### Build from Source
 
@@ -105,13 +114,22 @@ npm run build:msi
 
 ### Building
 
-To create an MSI installer for distribution:
+To create installers for distribution:
 
 ```bash
-npm run build
+# Windows MSI installer
+npm run build:msi
+
+# macOS DMG installer (Universal: Intel + Apple Silicon)
+npm run build:mac
+
+# Both platforms
+npm run build:all
 ```
 
-The installer will be created in the `dist/` folder.
+The installers will be created in the `dist/` folder.
+
+> **📚 Detailed Build Instructions**: See [BUILD_GUIDE.md](BUILD_GUIDE.md) for comprehensive build instructions, code signing, notarization, and mobile platform considerations.
 
 ## 📖 Usage
 
@@ -251,7 +269,12 @@ Potential future enhancements:
 
 ## 📝 Version History
 
-### v1.0.2 (Current)
+### v1.0.3 (Current)
+- **New Feature**: Down arrow key exits code blocks - press down on last line to create new paragraph below
+- **Bug Fix**: Checkbox click events no longer trigger conversion errors
+- **Improved**: Code block navigation with keyboard
+
+### v1.0.2
 - **New Feature**: Subfolder image support - images now work correctly in nested folders
   - Images are saved to `img/` folder in the same directory as the markdown file
   - `img` folders are automatically hidden from the file tree (like `.backups`)
