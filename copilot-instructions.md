@@ -564,7 +564,7 @@ Notes/
 
 ## Contact & Version
 
-- **Version**: 1.0.2
+- **Version**: 1.0.4
 - **Developer**: Peyton Winn
 - **Last Updated**: November 2025
 - **Framework**: Electron 39.1.2

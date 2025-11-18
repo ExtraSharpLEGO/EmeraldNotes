@@ -867,3 +867,135 @@ body {
   opacity: 1 !important;
   background-color: var(--accent-green);
 }
+
+/* Table Editor Styles */
+.table-editor-content {
+  background-color: var(--bg-secondary);
+  border-radius: 8px;
+  width: 90%;
+  max-width: 900px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px var(--shadow);
+}
+
+.table-editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.table-editor-header h3 {
+  margin: 0;
+  color: var(--accent-green);
+  font-size: 18px;
+}
+
+.table-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 16px 24px;
+  background-color: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+  align-items: center;
+}
+
+.toolbar-section {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.toolbar-label {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.icon-btn.danger {
+  color: #ef4444;
+}
+
+.icon-btn.danger:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+.alignment-btn {
+  transition: all 0.2s;
+}
+
+.alignment-btn.active {
+  background-color: var(--accent-green);
+  color: var(--bg-primary);
+}
+
+.alignment-btn.active:hover {
+  background-color: var(--accent-green-dark);
+}
+
+.table-editor-body {
+  flex: 1;
+  overflow: auto;
+  padding: 24px;
+  min-height: 300px;
+}
+
+#editable-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+#editable-table th,
+#editable-table td {
+  border: 1px solid var(--border-color);
+  padding: 12px;
+  min-width: 100px;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: text;
+  transition: all 0.2s;
+}
+
+#editable-table th {
+  background-color: var(--bg-tertiary);
+  font-weight: 600;
+  color: var(--accent-green);
+}
+
+#editable-table th:hover,
+#editable-table td:hover {
+  background-color: var(--bg-hover);
+}
+
+#editable-table th.selected,
+#editable-table td.selected {
+  outline: 2px solid var(--accent-green);
+  outline-offset: -2px;
+  background-color: rgba(74, 222, 128, 0.1);
+}
+
+#editable-table th[contenteditable="true"]:focus,
+#editable-table td[contenteditable="true"]:focus {
+  outline: 2px solid var(--accent-green);
+  outline-offset: -2px;
+  background-color: var(--bg-secondary);
+}
+
+.table-editor-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 20px 24px;
+  border-top: 1px solid var(--border-color);
+}
+
+/* Ensure table editor modal overlay works */
+#table-editor-modal {
+  z-index: 2001;
+}

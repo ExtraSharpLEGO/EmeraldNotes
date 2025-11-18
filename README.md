@@ -2,7 +2,7 @@
 
 A beautiful, feature-rich markdown notes application built with Electron. Dark theme with emerald green accents, real-time preview, and comprehensive backup system.
 
-![Version](https://img.shields.io/badge/version-1.0.3-brightgreen)
+![Version](https://img.shields.io/badge/version-1.0.4-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Electron](https://img.shields.io/badge/electron-39.1.2-blue)
 
@@ -12,14 +12,14 @@ A beautiful, feature-rich markdown notes application built with Electron. Dark t
 
 #### Windows
 1. **Download** the latest release from [GitHub Releases](https://github.com/ExtraSharpLEGO/EmeraldNotes/releases/latest)
-2. **Download** the `EmeraldNotes-1.0.3.msi` installer file
+2. **Download** the `EmeraldNotes-1.0.4.msi` installer file
 3. **Run** the installer by double-clicking the downloaded `.msi` file
 4. **Follow** the installation wizard (no configuration needed!)
 5. **Launch** EmeraldNotes from your Start Menu or Desktop shortcut
 
 #### macOS
 1. **Download** the latest release from [GitHub Releases](https://github.com/ExtraSharpLEGO/EmeraldNotes/releases/latest)
-2. **Download** the `EmeraldNotes-1.0.3.dmg` installer file
+2. **Download** the `EmeraldNotes-1.0.4.dmg` installer file
 3. **Open** the DMG file and drag EmeraldNotes to your Applications folder
 4. **Launch** EmeraldNotes from your Applications folder or Launchpad
 
@@ -55,6 +55,7 @@ npm run build:msi
 - **Syntax Highlighting**: Code blocks with beautiful syntax highlighting
 - **Interactive Checkboxes**: Click to toggle task list items directly in preview
 - **Rich Formatting**: Support for all standard markdown features
+- **Markdown Cheat Sheet**: Quick reference guide accessible via help button (?)
 - **Drag & Drop Images**: Simply drag images into the editor
 - **Auto-save**: Changes save automatically as you type
 
@@ -244,10 +245,10 @@ Checkboxes in preview are clickable. On click:
 **Solution**: Backups are only created after you start editing. Open and edit a file first.
 
 ### Issue: Wrong timestamp on backups
-**Solution**: This was fixed in v1.0.0. Update to latest version.
+**Solution**: This was fixed in v0.1.0. Update to latest version.
 
 ### Issue: Checkbox deleted file
-**Solution**: This was fixed in v1.0.0. Update to latest version.
+**Solution**: This was fixed in v0.1.0. Update to latest version.
 
 ## 🤝 Contributing
 
@@ -269,12 +270,19 @@ Potential future enhancements:
 
 ## 📝 Version History
 
-### v1.0.3 (Current)
+### v1.0.4 (Current)
+- **New Feature**: Markdown Cheat Sheet - comprehensive syntax reference accessible via help button (?)
+  - Quick reference for headers, emphasis, lists, links, images, code blocks, and more
+  - Beautiful modal with dark theme matching app design
+  - Located in editor toolbar for easy access
+- **Improved**: Event listener initialization order for better stability
+
+### v0.1.3
 - **New Feature**: Down arrow key exits code blocks - press down on last line to create new paragraph below
 - **Bug Fix**: Checkbox click events no longer trigger conversion errors
 - **Improved**: Code block navigation with keyboard
 
-### v1.0.2
+### v0.1.2
 - **New Feature**: Subfolder image support - images now work correctly in nested folders
   - Images are saved to `img/` folder in the same directory as the markdown file
   - `img` folders are automatically hidden from the file tree (like `.backups`)
@@ -282,7 +290,7 @@ Potential future enhancements:
   - Backward compatible with existing root-level images
   - Updated IPC bridge to pass current file path for proper folder creation
 
-### v1.0.1
+### v0.1.1
 - **Fixed**: Code block language dropdown bug - changing language no longer deletes file content
   - Added event propagation prevention on dropdown change events
   - Improved code block matching using content comparison instead of fragile regex
@@ -294,7 +302,7 @@ Potential future enhancements:
   - Works for both individual file and session restore
   - Files editable in both preview and raw markdown modes
 
-### v1.0.0
+### v0.1.0
 - Initial release with full feature set
 - Dark theme with emerald accents
 - Two-tier backup system

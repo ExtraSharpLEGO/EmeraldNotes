@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   setupEventListeners();
   setupMenuListeners();
+  setupTableEditorListeners();
   
   if (state.basePath) {
     await loadDirectory(state.basePath);
@@ -118,6 +119,15 @@ function setupEventListeners() {
     deleteNoteBtn.addEventListener('click', () => {
       console.log('Delete note button clicked');
       deleteCurrentNote();
+    });
+  }
+  
+  // Markdown help
+  const markdownHelpBtn = document.getElementById('markdown-help-btn');
+  if (markdownHelpBtn) {
+    markdownHelpBtn.addEventListener('click', () => {
+      console.log('Markdown help button clicked');
+      showMarkdownCheatSheet();
     });
   }
   
@@ -1033,7 +1043,7 @@ function showAboutModal() {
   
   // Version
   const version = document.createElement('div');
-  version.textContent = 'Version 1.0.3';
+  version.textContent = 'Version 1.0.4';
   version.style.cssText = `
     text-align: center;
     color: #a0a0a0;
@@ -1217,6 +1227,200 @@ function showAboutModal() {
   modal.appendChild(techSection);
   modal.appendChild(featuresSection);
   modal.appendChild(footer);
+  modal.appendChild(closeBtn);
+  
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  
+  // Close on overlay click
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) {
+      overlay.remove();
+    }
+  });
+}
+
+// Show Markdown Cheat Sheet Modal
+function showMarkdownCheatSheet() {
+  // Create overlay
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+  `;
+  
+  // Create modal content
+  const modal = document.createElement('div');
+  modal.style.cssText = `
+    background: #2a2a2a;
+    border: 2px solid #4ade80;
+    border-radius: 12px;
+    padding: 32px;
+    max-width: 700px;
+    max-height: 80vh;
+    width: 90%;
+    color: #e0e0e0;
+    overflow-y: auto;
+  `;
+  
+  const title = document.createElement('h1');
+  title.textContent = 'Markdown Cheat Sheet';
+  title.style.cssText = `
+    margin: 0 0 24px 0;
+    color: #4ade80;
+    font-size: 28px;
+    text-align: center;
+    font-weight: bold;
+  `;
+  
+  // Cheat sheet content
+  const cheatSheetItems = [
+    {
+      category: 'Headers',
+      items: [
+        { syntax: '# Header 1', description: 'Largest header' },
+        { syntax: '## Header 2', description: 'Second level header' },
+        { syntax: '### Header 3', description: 'Third level header' }
+      ]
+    },
+    {
+      category: 'Emphasis',
+      items: [
+        { syntax: '**bold text**', description: 'Bold text' },
+        { syntax: '*italic text*', description: 'Italic text' },
+        { syntax: '~~strikethrough~~', description: 'Strikethrough text' }
+      ]
+    },
+    {
+      category: 'Lists',
+      items: [
+        { syntax: '- Item 1', description: 'Unordered list' },
+        { syntax: '1. Item 1', description: 'Ordered list' },
+        { syntax: '- [ ] Task', description: 'Unchecked task' },
+        { syntax: '- [x] Task', description: 'Checked task' }
+      ]
+    },
+    {
+      category: 'Links & Images',
+      items: [
+        { syntax: '[Link text](url)', description: 'Hyperlink' },
+        { syntax: '![Alt text](image.jpg)', description: 'Image' }
+      ]
+    },
+    {
+      category: 'Code',
+      items: [
+        { syntax: '`inline code`', description: 'Inline code' },
+        { syntax: '```language\\ncode block\\n```', description: 'Code block with syntax highlighting' }
+      ]
+    },
+    {
+      category: 'Other',
+      items: [
+        { syntax: '> Quote', description: 'Blockquote' },
+        { syntax: '---', description: 'Horizontal rule' },
+        { syntax: '| Col 1 | Col 2 |', description: 'Table (use table editor button)' }
+      ]
+    }
+  ];
+  
+  // Create sections for each category
+  cheatSheetItems.forEach(section => {
+    const sectionDiv = document.createElement('div');
+    sectionDiv.style.cssText = 'margin-bottom: 24px;';
+    
+    const categoryLabel = document.createElement('h3');
+    categoryLabel.textContent = section.category;
+    categoryLabel.style.cssText = `
+      color: #4ade80;
+      font-size: 18px;
+      font-weight: bold;
+      margin: 0 0 12px 0;
+    `;
+    
+    const itemsContainer = document.createElement('div');
+    itemsContainer.style.cssText = 'display: flex; flex-direction: column; gap: 8px;';
+    
+    section.items.forEach(item => {
+      const itemDiv = document.createElement('div');
+      itemDiv.style.cssText = `
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 12px;
+        background: #1a1a1a;
+        border-radius: 6px;
+        gap: 16px;
+      `;
+      
+      const syntaxSpan = document.createElement('code');
+      syntaxSpan.textContent = item.syntax;
+      syntaxSpan.style.cssText = `
+        color: #4ade80;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 13px;
+        flex: 0 0 auto;
+      `;
+      
+      const descSpan = document.createElement('span');
+      descSpan.textContent = item.description;
+      descSpan.style.cssText = `
+        color: #a0a0a0;
+        font-size: 13px;
+        flex: 1;
+        text-align: right;
+      `;
+      
+      itemDiv.appendChild(syntaxSpan);
+      itemDiv.appendChild(descSpan);
+      itemsContainer.appendChild(itemDiv);
+    });
+    
+    sectionDiv.appendChild(categoryLabel);
+    sectionDiv.appendChild(itemsContainer);
+    modal.appendChild(sectionDiv);
+  });
+  
+  // Close Button
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = 'Close';
+  closeBtn.style.cssText = `
+    width: 100%;
+    margin-top: 24px;
+    padding: 12px;
+    background: #4ade80;
+    color: #000;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    transition: all 0.2s;
+  `;
+  
+  closeBtn.addEventListener('mouseenter', () => {
+    closeBtn.style.background = '#22c55e';
+    closeBtn.style.transform = 'translateY(-1px)';
+  });
+  
+  closeBtn.addEventListener('mouseleave', () => {
+    closeBtn.style.background = '#4ade80';
+    closeBtn.style.transform = 'translateY(0)';
+  });
+  
+  closeBtn.addEventListener('click', () => overlay.remove());
+  
+  // Assemble modal
+  modal.insertBefore(title, modal.firstChild);
   modal.appendChild(closeBtn);
   
   overlay.appendChild(modal);
@@ -3608,3 +3812,537 @@ function hideWelcomeScreen() {
     }
   }
 }
+
+// ============================================
+// TABLE EDITOR FUNCTIONALITY
+// ============================================
+
+// Table Editor State
+const tableEditorState = {
+  selectedCell: null,
+  columnAlignments: ['left', 'left', 'left'],
+  savedRange: null  // Store cursor position when modal opens
+};
+
+// Show Table Editor modal
+function showTableEditor() {
+  const preview = document.getElementById('markdown-preview');
+  const selection = window.getSelection();
+  
+  // Save the current cursor position/range before opening modal
+  if (selection.rangeCount > 0) {
+    const range = selection.getRangeAt(0);
+    
+    // Verify the range is within the preview
+    let container = range.commonAncestorContainer;
+    let isInPreview = false;
+    while (container) {
+      if (container === preview) {
+        isInPreview = true;
+        break;
+      }
+      container = container.parentNode;
+    }
+    
+    if (isInPreview) {
+      // Clone and save the range
+      tableEditorState.savedRange = range.cloneRange();
+    } else {
+      // Range not in preview, create one at the end
+      const newRange = document.createRange();
+      newRange.selectNodeContents(preview);
+      newRange.collapse(false);
+      tableEditorState.savedRange = newRange;
+    }
+  } else {
+    // No selection, create one at the end of preview
+    const newRange = document.createRange();
+    newRange.selectNodeContents(preview);
+    newRange.collapse(false);
+    tableEditorState.savedRange = newRange;
+  }
+  
+  const modal = document.getElementById('table-editor-modal');
+  modal.style.display = 'flex';
+  
+  // Reset table to default
+  const table = document.getElementById('editable-table');
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th contenteditable="true" data-col="0" data-row="0">Header 1</th>
+        <th contenteditable="true" data-col="1" data-row="0">Header 2</th>
+        <th contenteditable="true" data-col="2" data-row="0">Header 3</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td contenteditable="true" data-col="0" data-row="1">Cell 1</td>
+        <td contenteditable="true" data-col="1" data-row="1">Cell 2</td>
+        <td contenteditable="true" data-col="2" data-row="1">Cell 3</td>
+      </tr>
+      <tr>
+        <td contenteditable="true" data-col="0" data-row="2">Cell 4</td>
+        <td contenteditable="true" data-col="1" data-row="2">Cell 5</td>
+        <td contenteditable="true" data-col="2" data-row="2">Cell 6</td>
+      </tr>
+    </tbody>
+  `;
+  
+  // Reset alignments
+  tableEditorState.columnAlignments = ['left', 'left', 'left'];
+  tableEditorState.selectedCell = null;
+  
+  // Apply default alignments to all cells
+  applyAllColumnAlignments();
+  
+  // Update dimensions
+  updateTableDimensions();
+  
+  // Attach cell click listeners
+  attachTableCellListeners();
+}
+
+// Hide table editor modal
+function hideTableEditor() {
+  document.getElementById('table-editor-modal').style.display = 'none';
+  tableEditorState.selectedCell = null;
+}
+
+// Attach click listeners to table cells
+function attachTableCellListeners() {
+  const table = document.getElementById('editable-table');
+  const cells = table.querySelectorAll('th, td');
+  
+  cells.forEach(cell => {
+    cell.addEventListener('click', (e) => {
+      // Remove previous selection
+      table.querySelectorAll('.selected').forEach(c => c.classList.remove('selected'));
+      
+      // Select current cell
+      cell.classList.add('selected');
+      tableEditorState.selectedCell = {
+        col: parseInt(cell.dataset.col),
+        row: parseInt(cell.dataset.row),
+        element: cell
+      };
+      
+      // Update alignment button states
+      updateAlignmentButtons();
+    });
+  });
+}
+
+// Update table dimensions display
+function updateTableDimensions() {
+  const table = document.getElementById('editable-table');
+  const rows = table.querySelectorAll('tr').length;
+  const cols = table.querySelector('tr')?.querySelectorAll('th, td').length || 0;
+  
+  document.getElementById('table-dimensions').textContent = `${cols} columns × ${rows} rows`;
+}
+
+// Add row above selected cell
+function addRowAbove() {
+  const table = document.getElementById('editable-table');
+  const selectedRow = tableEditorState.selectedCell?.row || 1;
+  const cols = table.querySelector('tr').querySelectorAll('th, td').length;
+  
+  const newRow = document.createElement('tr');
+  for (let i = 0; i < cols; i++) {
+    const cell = document.createElement(selectedRow === 0 ? 'th' : 'td');
+    cell.contentEditable = 'true';
+    cell.dataset.col = i;
+    cell.textContent = selectedRow === 0 ? `Header ${i + 1}` : `Cell`;
+    newRow.appendChild(cell);
+  }
+  
+  // Insert row
+  const allRows = table.querySelectorAll('tr');
+  const targetRow = allRows[selectedRow];
+  targetRow.parentNode.insertBefore(newRow, targetRow);
+  
+  // Update row indices
+  updateTableIndices();
+  applyAllColumnAlignments();
+  attachTableCellListeners();
+  updateTableDimensions();
+}
+
+// Add row below selected cell
+function addRowBelow() {
+  const table = document.getElementById('editable-table');
+  const selectedRow = tableEditorState.selectedCell?.row || 1;
+  const cols = table.querySelector('tr').querySelectorAll('th, td').length;
+  
+  const newRow = document.createElement('tr');
+  for (let i = 0; i < cols; i++) {
+    const cell = document.createElement('td');
+    cell.contentEditable = 'true';
+    cell.dataset.col = i;
+    cell.textContent = 'Cell';
+    newRow.appendChild(cell);
+  }
+  
+  // Insert row
+  const allRows = table.querySelectorAll('tr');
+  const targetRow = allRows[selectedRow];
+  
+  if (targetRow.nextSibling) {
+    targetRow.parentNode.insertBefore(newRow, targetRow.nextSibling);
+  } else {
+    targetRow.parentNode.appendChild(newRow);
+  }
+  
+  // Update row indices
+  updateTableIndices();
+  applyAllColumnAlignments();
+  attachTableCellListeners();
+  updateTableDimensions();
+}
+
+// Delete selected row
+function deleteRow() {
+  const table = document.getElementById('editable-table');
+  const selectedRow = tableEditorState.selectedCell?.row;
+  
+  if (selectedRow === undefined) {
+    alert('Please select a cell in the row you want to delete');
+    return;
+  }
+  
+  const allRows = table.querySelectorAll('tr');
+  if (allRows.length <= 2) {
+    alert('Table must have at least 2 rows (1 header + 1 data row)');
+    return;
+  }
+  
+  allRows[selectedRow].remove();
+  
+  // Update row indices
+  updateTableIndices();
+  attachTableCellListeners();
+  updateTableDimensions();
+  tableEditorState.selectedCell = null;
+}
+
+// Add column left of selected cell
+function addColumnLeft() {
+  const table = document.getElementById('editable-table');
+  const selectedCol = tableEditorState.selectedCell?.col || 0;
+  
+  const rows = table.querySelectorAll('tr');
+  rows.forEach((row, rowIndex) => {
+    const isHeader = rowIndex === 0;
+    const cell = document.createElement(isHeader ? 'th' : 'td');
+    cell.contentEditable = 'true';
+    cell.textContent = isHeader ? 'Header' : 'Cell';
+    
+    const targetCell = row.querySelectorAll('th, td')[selectedCol];
+    row.insertBefore(cell, targetCell);
+  });
+  
+  // Add alignment for new column
+  tableEditorState.columnAlignments.splice(selectedCol, 0, 'left');
+  
+  // Update column indices
+  updateTableIndices();
+  applyAllColumnAlignments();
+  attachTableCellListeners();
+  updateTableDimensions();
+}
+
+// Add column right of selected cell
+function addColumnRight() {
+  const table = document.getElementById('editable-table');
+  const selectedCol = tableEditorState.selectedCell?.col ?? 0;
+  
+  const rows = table.querySelectorAll('tr');
+  rows.forEach((row, rowIndex) => {
+    const isHeader = rowIndex === 0;
+    const cell = document.createElement(isHeader ? 'th' : 'td');
+    cell.contentEditable = 'true';
+    cell.textContent = isHeader ? 'Header' : 'Cell';
+    
+    const targetCell = row.querySelectorAll('th, td')[selectedCol];
+    if (targetCell.nextSibling) {
+      row.insertBefore(cell, targetCell.nextSibling);
+    } else {
+      row.appendChild(cell);
+    }
+  });
+  
+  // Add alignment for new column
+  tableEditorState.columnAlignments.splice(selectedCol + 1, 0, 'left');
+  
+  // Update column indices
+  updateTableIndices();
+  applyAllColumnAlignments();
+  attachTableCellListeners();
+  updateTableDimensions();
+}
+
+// Delete selected column
+function deleteColumn() {
+  const table = document.getElementById('editable-table');
+  const selectedCol = tableEditorState.selectedCell?.col;
+  
+  if (selectedCol === undefined) {
+    alert('Please select a cell in the column you want to delete');
+    return;
+  }
+  
+  const firstRow = table.querySelector('tr');
+  if (firstRow.querySelectorAll('th, td').length <= 1) {
+    alert('Table must have at least 1 column');
+    return;
+  }
+  
+  const rows = table.querySelectorAll('tr');
+  rows.forEach(row => {
+    const cells = row.querySelectorAll('th, td');
+    if (cells[selectedCol]) {
+      cells[selectedCol].remove();
+    }
+  });
+  
+  // Remove alignment for deleted column
+  tableEditorState.columnAlignments.splice(selectedCol, 1);
+  
+  // Update column indices
+  updateTableIndices();
+  applyAllColumnAlignments();
+  attachTableCellListeners();
+  updateTableDimensions();
+  tableEditorState.selectedCell = null;
+}
+
+// Set column alignment
+function setColumnAlignment(alignment) {
+  const selectedCol = tableEditorState.selectedCell?.col;
+  
+  if (selectedCol === undefined) {
+    alert('Please select a cell in the column you want to align');
+    return;
+  }
+  
+  tableEditorState.columnAlignments[selectedCol] = alignment;
+  
+  // Apply visual alignment to all cells in the selected column
+  const table = document.getElementById('editable-table');
+  const rows = table.querySelectorAll('tr');
+  
+  rows.forEach(row => {
+    const cells = row.querySelectorAll('th, td');
+    if (cells[selectedCol]) {
+      cells[selectedCol].style.textAlign = alignment;
+    }
+  });
+  
+  updateAlignmentButtons();
+}
+
+// Apply all column alignments to the table
+function applyAllColumnAlignments() {
+  const table = document.getElementById('editable-table');
+  const rows = table.querySelectorAll('tr');
+  
+  rows.forEach(row => {
+    const cells = row.querySelectorAll('th, td');
+    cells.forEach((cell, colIndex) => {
+      const alignment = tableEditorState.columnAlignments[colIndex] || 'left';
+      cell.style.textAlign = alignment;
+    });
+  });
+}
+
+// Update alignment button states
+function updateAlignmentButtons() {
+  const selectedCol = tableEditorState.selectedCell?.col;
+  const buttons = document.querySelectorAll('.alignment-btn');
+  
+  buttons.forEach(btn => btn.classList.remove('active'));
+  
+  if (selectedCol !== undefined) {
+    const currentAlignment = tableEditorState.columnAlignments[selectedCol] || 'left';
+    const activeBtn = document.querySelector(`.alignment-btn[data-align="${currentAlignment}"]`);
+    if (activeBtn) {
+      activeBtn.classList.add('active');
+    }
+  }
+}
+
+// Update table cell indices after structure changes
+function updateTableIndices() {
+  const table = document.getElementById('editable-table');
+  const rows = table.querySelectorAll('tr');
+  
+  rows.forEach((row, rowIndex) => {
+    const cells = row.querySelectorAll('th, td');
+    cells.forEach((cell, colIndex) => {
+      cell.dataset.row = rowIndex;
+      cell.dataset.col = colIndex;
+    });
+  });
+}
+
+// Generate markdown from table
+function generateMarkdownTable() {
+  const table = document.getElementById('editable-table');
+  const rows = table.querySelectorAll('tr');
+  
+  let markdown = '\n';
+  
+  // Process each row
+  rows.forEach((row, rowIndex) => {
+    const cells = row.querySelectorAll('th, td');
+    const cellTexts = Array.from(cells).map(cell => cell.textContent.trim() || ' ');
+    
+    // Add row content
+    markdown += '| ' + cellTexts.join(' | ') + ' |\n';
+    
+    // Add separator after header row
+    if (rowIndex === 0) {
+      const separators = tableEditorState.columnAlignments.map(align => {
+        if (align === 'center') return ':---:';
+        if (align === 'right') return '---:';
+        return '---';
+      });
+      markdown += '| ' + separators.join(' | ') + ' |\n';
+    }
+  });
+  
+  markdown += '\n';
+  return markdown;
+}
+
+// Insert table into preview
+function insertTableIntoPreview() {
+  const markdownTable = generateMarkdownTable();
+  const preview = document.getElementById('markdown-preview');
+  
+  // Convert the markdown table to HTML using marked
+  let tableHTML = '';
+  try {
+    tableHTML = marked.parse(markdownTable);
+    // Remove wrapping <p> tags if present
+    tableHTML = tableHTML.replace(/^<p>(.*)<\/p>$/s, '$1');
+  } catch (error) {
+    console.error('Error parsing markdown table:', error);
+    alert('Failed to generate table');
+    return;
+  }
+  
+  // Sanitize the HTML
+  const cleanHTML = DOMPurify.sanitize(tableHTML);
+  
+  // Create a temporary container to hold the HTML
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = cleanHTML;
+  
+  // Get the table element
+  const tableElement = tempDiv.querySelector('table');
+  
+  if (!tableElement) {
+    console.error('No table element found in generated HTML');
+    alert('Failed to generate table');
+    return;
+  }
+  
+  // Apply alignment styles to the inserted table
+  const rows = tableElement.querySelectorAll('tr');
+  rows.forEach(row => {
+    const cells = row.querySelectorAll('th, td');
+    cells.forEach((cell, colIndex) => {
+      const alignment = tableEditorState.columnAlignments[colIndex] || 'left';
+      cell.style.textAlign = alignment;
+    });
+  });
+  
+  // Focus the preview first
+  preview.focus();
+  
+  const selection = window.getSelection();
+  let range;
+  
+  // Use the saved range if available, otherwise create one at the end
+  if (tableEditorState.savedRange) {
+    range = tableEditorState.savedRange;
+    selection.removeAllRanges();
+    selection.addRange(range);
+  } else {
+    // Fallback: create range at end of preview
+    range = document.createRange();
+    range.selectNodeContents(preview);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+  
+  // Insert the table
+  range.deleteContents();
+  range.insertNode(tableElement);
+  
+  // Add a paragraph after the table for continued editing
+  const afterPara = document.createElement('p');
+  afterPara.innerHTML = '<br>';
+  range.setStartAfter(tableElement);
+  range.insertNode(afterPara);
+  
+  // Move cursor to the paragraph after the table
+  range.setStart(afterPara, 0);
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  
+  // Trigger input to save changes
+  preview.dispatchEvent(new Event('input', { bubbles: true }));
+  
+  // Close modal
+  hideTableEditor();
+  
+  // Clear the saved range
+  tableEditorState.savedRange = null;
+}
+
+// Setup table editor event listeners
+function setupTableEditorListeners() {
+  // Open table editor
+  document.getElementById('insert-table-btn')?.addEventListener('click', showTableEditor);
+  
+  // Close modal
+  document.getElementById('table-editor-close')?.addEventListener('click', hideTableEditor);
+  document.getElementById('table-editor-cancel')?.addEventListener('click', hideTableEditor);
+  
+  // Row operations
+  document.getElementById('table-add-row-above')?.addEventListener('click', addRowAbove);
+  document.getElementById('table-add-row-below')?.addEventListener('click', addRowBelow);
+  document.getElementById('table-delete-row')?.addEventListener('click', deleteRow);
+  
+  // Column operations
+  document.getElementById('table-add-column-left')?.addEventListener('click', addColumnLeft);
+  document.getElementById('table-add-column-right')?.addEventListener('click', addColumnRight);
+  document.getElementById('table-delete-column')?.addEventListener('click', deleteColumn);
+  
+  // Alignment buttons
+  document.querySelectorAll('.alignment-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const alignment = btn.dataset.align;
+      setColumnAlignment(alignment);
+    });
+  });
+  
+  // Insert table
+  document.getElementById('table-editor-insert')?.addEventListener('click', insertTableIntoPreview);
+  
+  // Close modal on overlay click
+  document.getElementById('table-editor-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'table-editor-modal') {
+      hideTableEditor();
+    }
+  });
+}
+
+// ============================================
+// END TABLE EDITOR FUNCTIONALITY
+// ============================================
