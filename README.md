@@ -17,6 +17,8 @@ A beautiful, feature-rich markdown notes application built with Electron. Dark t
 4. **Follow** the installation wizard (no configuration needed!)
 5. **Launch** EmeraldNotes from your Start Menu or Desktop shortcut
 
+> **Security Note**: Official releases are code-signed by Peyton Winn. While Windows may show a warning (due to self-signed certificate), you can verify authenticity by checking the certificate details show "EmeraldNotes" as the publisher.
+
 #### macOS
 1. **Download** the latest release from [GitHub Releases](https://github.com/ExtraSharpLEGO/EmeraldNotes/releases/latest)
 2. **Download** the `EmeraldNotes-1.0.4.dmg` installer file

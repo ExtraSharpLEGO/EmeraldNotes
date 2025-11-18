@@ -8,11 +8,12 @@
     "start": "electron .",
     "dev": "cross-env DEVTOOLS=true electron .",
     "build": "electron-builder --win",
-    "build:msi": "electron-builder --win --config.win.target=msi",
+    "build:msi": "electron-builder --win --config.win.target=msi && powershell -ExecutionPolicy Bypass -File sign-msi.ps1",
     "build:mac": "electron-builder --mac",
     "build:mac:dmg": "electron-builder --mac --config.mac.target=dmg",
-    "build:all": "electron-builder --win --mac",
-    "build:dir": "electron-builder --dir"
+    "build:all": "electron-builder --win --mac && powershell -ExecutionPolicy Bypass -File sign-msi.ps1",
+    "build:dir": "electron-builder --dir",
+    "sign": "powershell -ExecutionPolicy Bypass -File sign-msi.ps1"
   },
   "keywords": [
     "markdown",

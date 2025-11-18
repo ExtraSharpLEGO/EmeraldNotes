@@ -562,6 +562,73 @@ Notes/
 
 **Key Learning**: When dealing with relative paths in nested folder structures, always calculate paths relative to the current file's location, not the project root.
 
+## Code Signing
+
+### Automatic MSI Signing
+- **Script**: `sign-msi.ps1` - PowerShell script for signing MSI installers
+- **Certificate**: Self-signed code signing certificate (CN=EmeraldNotes, O=Peyton Winn, C=US)
+- **Thumbprint**: `996DBF445D2FA878EF768804F6D90F6B0D43C260`
+- **Valid Until**: November 18, 2027
+- **Timestamp Server**: http://timestamp.digicert.com
+
+### Build Commands with Auto-Signing
+```powershell
+# Build MSI with automatic signing
+npm run build:msi
+
+# Build for all platforms with Windows signing
+npm run build:all
+
+# Sign existing MSI manually
+npm run sign
+```
+
+### How It Works
+1. `electron-builder` creates the MSI installer
+2. Script automatically runs via npm postbuild hook
+3. Finds certificate with "EmeraldNotes" in subject
+4. Signs MSI with timestamp from DigiCert
+5. Verifies signature and displays status
+
+### Certificate Management
+**Current**: Self-signed certificate (for testing/personal use)
+- Users will see "Unknown Publisher" warning
+- Good for development and internal distribution
+
+**For Public Release**: Consider commercial certificate
+- DigiCert, Sectigo, or SSL.com (~$200-400/year)
+- Eliminates user warnings
+- Builds trust and credibility
+
+## Documentation Guidelines
+
+### When Implementing New Features
+**ALWAYS update README.md instead of creating new documentation files**
+
+When you implement a new feature:
+1. ✅ Update the `## ✨ Features` section in README.md with the new feature
+2. ✅ Add a version entry in `## 📝 Version History` section
+3. ✅ Update version badges at the top if version changed
+4. ✅ Add usage instructions in `## 📖 Usage` section if needed
+5. ❌ DO NOT create separate .md files like FEATURE_NAME.md, NEW_FEATURE_PLAN.md, etc.
+
+### Feature Documentation Pattern
+```markdown
+### v1.0.X (Current)
+- **New Feature**: [Feature Name] - [one-line description]
+  - [Key capability 1]
+  - [Key capability 2]
+  - [Key capability 3]
+- **Improved**: [What was improved and why]
+- **Bug Fix**: [What was fixed]
+```
+
+### README is the Single Source of Truth
+- User-facing feature documentation goes in README.md
+- Technical implementation details stay in copilot-instructions.md
+- No need for separate planning or summary documents
+- Keep documentation consolidated and maintainable
+
 ## Contact & Version
 
 - **Version**: 1.0.4
