@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
   setupMenuListeners();
   setupTableEditorListeners();
+  setupAIListeners();
   
   if (state.basePath) {
     await loadDirectory(state.basePath);
@@ -718,6 +719,11 @@ function setupMenuListeners() {
   // Listen for "About" from Help menu
   window.electronAPI.onShowAbout(() => {
     showAboutModal();
+  });
+  
+  // Listen for "AI Assistant Configuration" from Settings menu
+  window.electronAPI.onOpenAISetup(() => {
+    showAISetupModal();
   });
 }
 
@@ -1479,6 +1485,456 @@ async function moveFileToFolder(filePath, targetFolderPath) {
   } catch (error) {
     console.error('Error moving file:', error);
     alert('Failed to move file: ' + error.message);
+  }
+}
+
+// ============================================
+// AI ASSISTANT
+// ============================================
+
+// AI Assistant State
+let aiSettings = {
+  enabled: false,
+  githubToken: '',
+  model: 'gpt-4o-mini',
+  maxTokens: 2000,
+  temperature: 0.7,
+  savedRange: null  // Store cursor position when AI modal opens
+};
+
+// Load AI settings on startup
+async function loadAISettings() {
+  try {
+    const result = await window.electronAPI.getAISettings();
+    if (result.success) {
+      aiSettings = { ...aiSettings, ...result.settings };
+    }
+  } catch (error) {
+    console.error('Error loading AI settings:', error);
+  }
+}
+
+// Save AI settings
+async function saveAISettings() {
+  try {
+    await window.electronAPI.saveAISettings(aiSettings);
+  } catch (error) {
+    console.error('Error saving AI settings:', error);
+  }
+}
+
+// Show AI modal
+function showAIModal() {
+  // Check if AI is configured
+  if (!aiSettings.enabled || !aiSettings.githubToken) {
+    showAISetupModal();
+    return;
+  }
+  
+  // Save cursor position before opening modal
+  const preview = document.getElementById('markdown-preview');
+  const selection = window.getSelection();
+  
+  if (selection.rangeCount > 0 && preview.contains(selection.anchorNode)) {
+    const range = selection.getRangeAt(0);
+    aiSettings.savedRange = range.cloneRange();
+  } else {
+    // If no selection in preview, create range at end
+    const newRange = document.createRange();
+    newRange.selectNodeContents(preview);
+    newRange.collapse(false);
+    aiSettings.savedRange = newRange;
+  }
+  
+  const modal = document.getElementById('ai-modal');
+  const input = document.getElementById('ai-prompt-input');
+  
+  modal.style.display = 'flex';
+  input.value = '';
+  input.focus();
+}
+
+// Hide AI modal
+function hideAIModal() {
+  document.getElementById('ai-modal').style.display = 'none';
+}
+
+// Show AI setup modal
+function showAISetupModal() {
+  const modal = document.getElementById('ai-setup-modal');
+  const tokenInput = document.getElementById('ai-setup-token-input');
+  const modelSelect = document.getElementById('ai-setup-model-select');
+  
+  // Pre-fill if settings exist
+  if (aiSettings.githubToken) {
+    tokenInput.value = aiSettings.githubToken;
+  }
+  modelSelect.value = aiSettings.model || 'gpt-4o-mini';
+  
+  modal.style.display = 'flex';
+  tokenInput.focus();
+}
+
+// Hide AI setup modal
+function hideAISetupModal() {
+  document.getElementById('ai-setup-modal').style.display = 'none';
+}
+
+// Show AI loading overlay
+function showAILoadingOverlay() {
+  document.getElementById('ai-loading-overlay').style.display = 'flex';
+}
+
+// Hide AI loading overlay
+function hideAILoadingOverlay() {
+  document.getElementById('ai-loading-overlay').style.display = 'none';
+}
+
+// Determine AI mode based on prompt and existing content
+function determineAIMode(prompt, hasExistingContent) {
+  const lowerPrompt = prompt.toLowerCase();
+  
+  // Keywords that indicate inserting at cursor position
+  const insertKeywords = ['add', 'insert', 'create'];
+  // Keywords that indicate appending to end
+  const appendKeywords = ['append', 'give me a', 'make a', 'write a'];
+  const replaceKeywords = ['reformat', 'reorganize', 'restructure', 'improve', 'fix', 'clean up', 'edit'];
+  
+  // If no existing content, always generate
+  if (!hasExistingContent) {
+    return 'generate';
+  }
+  
+  // Check for replace keywords
+  for (const keyword of replaceKeywords) {
+    if (lowerPrompt.includes(keyword)) {
+      return 'replace';
+    }
+  }
+  
+  // Check for insert keywords (at cursor position)
+  for (const keyword of insertKeywords) {
+    if (lowerPrompt.includes(keyword)) {
+      return 'insert';
+    }
+  }
+  
+  // Check for append keywords (at end)
+  for (const keyword of appendKeywords) {
+    if (lowerPrompt.includes(keyword)) {
+      return 'append';
+    }
+  }
+  
+  // Default to append if content exists
+  return 'append';
+}
+
+// Build AI prompt with context
+function buildAIPrompt(userPrompt, existingContent, mode) {
+  let systemPrompt = `You are a markdown content assistant. Generate well-formatted markdown content based on user requests.
+
+Rules:
+- Use proper markdown syntax
+- Include appropriate headers (# ## ###)
+- Use lists, tables, code blocks where appropriate
+- Be concise and well-organized
+- Return ONLY markdown content, no meta-commentary or explanations
+- Do not wrap the markdown in code blocks
+
+`;
+
+  if (mode === 'append') {
+    systemPrompt += `\nContext: The user has existing content. Add new content that complements what's already there.\n`;
+    if (existingContent && existingContent.trim().length > 0) {
+      systemPrompt += `\nExisting content:\n${existingContent}\n\n`;
+    }
+    systemPrompt += `User request: ${userPrompt}\n\nGenerate ONLY the new markdown content to append. Do not repeat existing content.`;
+  } else if (mode === 'replace') {
+    systemPrompt += `\nContext: Reformat/reorganize the user's existing content.\n`;
+    systemPrompt += `\nExisting content:\n${existingContent}\n\n`;
+    systemPrompt += `User request: ${userPrompt}\n\nGenerate the reformatted markdown content.`;
+  } else {
+    // generate mode
+    systemPrompt += `\nUser request: ${userPrompt}\n\nGenerate the requested markdown content.`;
+  }
+  
+  return systemPrompt;
+}
+
+// Call GitHub Models API
+async function callGitHubModelsAPI(prompt) {
+  const response = await fetch('https://models.inference.ai.azure.com/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${aiSettings.githubToken}`
+    },
+    body: JSON.stringify({
+      messages: [
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      model: aiSettings.model,
+      temperature: aiSettings.temperature,
+      max_tokens: aiSettings.maxTokens,
+      top_p: 1
+    })
+  });
+  
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || `API request failed with status ${response.status}`);
+  }
+  
+  const data = await response.json();
+  return data.choices[0].message.content;
+}
+
+// Handle AI request
+async function handleAIRequest(prompt) {
+  if (!prompt || prompt.trim().length === 0) {
+    alert('Please enter a prompt');
+    return;
+  }
+  
+  // Hide AI modal
+  hideAIModal();
+  
+  // Show loading overlay
+  showAILoadingOverlay();
+  
+  try {
+    // Get current content
+    const markdownInput = document.getElementById('markdown-input');
+    const existingContent = markdownInput.value || '';
+    const hasExistingContent = existingContent.trim().length > 0;
+    
+    // Determine mode
+    const mode = determineAIMode(prompt, hasExistingContent);
+    
+    console.log('AI Mode:', mode, '| Has content:', hasExistingContent);
+    
+    // Build prompt
+    const fullPrompt = buildAIPrompt(prompt, existingContent, mode);
+    
+    // Call AI API
+    const generatedContent = await callGitHubModelsAPI(fullPrompt);
+    
+    // Hide loading overlay
+    hideAILoadingOverlay();
+    
+    // Apply content based on mode
+    let newContent = '';
+    if (mode === 'insert' && aiSettings.savedRange) {
+      // Insert at cursor position
+      const markdownPreview = document.getElementById('markdown-preview');
+      
+      // Convert generated markdown to HTML for preview
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = marked.parse(generatedContent);
+      
+      // Get the range and insert content
+      let range = aiSettings.savedRange;
+      
+      // Ensure the range is valid
+      if (range.startContainer && range.startContainer.ownerDocument) {
+        // Focus the preview
+        markdownPreview.focus();
+        
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        
+        // Delete any selected content
+        range.deleteContents();
+        
+        // Insert each child node from the tempDiv
+        const fragment = document.createDocumentFragment();
+        while (tempDiv.firstChild) {
+          fragment.appendChild(tempDiv.firstChild);
+        }
+        range.insertNode(fragment);
+        
+        // Move cursor after inserted content
+        range.setStartAfter(fragment.lastChild || range.startContainer);
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        
+        // Trigger input event to sync changes with markdown input
+        markdownPreview.dispatchEvent(new Event('input', { bubbles: true }));
+        
+        // Clear saved range
+        aiSettings.savedRange = null;
+        
+        // Skip the normal rendering flow since we've already inserted
+        hideAILoadingOverlay();
+        return;
+      } else {
+        // Fallback to append if range is invalid
+        newContent = existingContent + (existingContent ? '\n\n---\n\n' : '') + generatedContent;
+        markdownInput.value = newContent;
+      }
+    } else if (mode === 'append') {
+      // Append to existing content with separator
+      newContent = existingContent + (existingContent ? '\n\n---\n\n' : '') + generatedContent;
+      markdownInput.value = newContent;
+    } else if (mode === 'replace') {
+      // Ask for confirmation before replacing
+      if (confirm('This will replace all existing content. Are you sure?')) {
+        newContent = generatedContent;
+        markdownInput.value = newContent;
+      } else {
+        return; // User canceled
+      }
+    } else {
+      // Generate mode
+      newContent = generatedContent;
+      markdownInput.value = newContent;
+    }
+    
+    // Re-render preview while keeping it editable
+    const markdownPreview = document.getElementById('markdown-preview');
+    renderMarkdownPreview(newContent, true);
+    
+    // Ensure preview stays editable and focused
+    setTimeout(() => {
+      markdownPreview.contentEditable = 'true';
+      markdownPreview.classList.add('editable');
+      
+      // Focus the editor and place cursor at the end
+      markdownPreview.focus();
+      
+      // Place cursor at the end of content
+      const range = document.createRange();
+      const selection = window.getSelection();
+      range.selectNodeContents(markdownPreview);
+      range.collapse(false); // Collapse to end
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }, 100);
+    
+    // Auto-save after a short delay
+    clearTimeout(state.saveTimeout);
+    state.saveTimeout = setTimeout(() => {
+      saveCurrentFile(newContent);
+    }, 1000);
+    
+  } catch (error) {
+    hideAILoadingOverlay();
+    console.error('AI request failed:', error);
+    
+    let errorMessage = 'Failed to generate content. ';
+    if (error.message.includes('401') || error.message.includes('403')) {
+      errorMessage += 'Your GitHub token may be invalid. Please check your token in settings.';
+    } else if (error.message.includes('429')) {
+      errorMessage += 'Rate limit reached. Please try again in a moment.';
+    } else {
+      errorMessage += error.message;
+    }
+    
+    alert(errorMessage);
+  }
+}
+
+// Setup AI event listeners
+function setupAIListeners() {
+  // Load AI settings
+  loadAISettings();
+  
+  // AI button click
+  const aiBtn = document.getElementById('ai-assistant-btn');
+  if (aiBtn) {
+    aiBtn.addEventListener('click', showAIModal);
+  }
+  
+  // AI modal - close button
+  const aiCloseBtn = document.getElementById('ai-modal-close');
+  if (aiCloseBtn) {
+    aiCloseBtn.addEventListener('click', hideAIModal);
+  }
+  
+  // AI modal - cancel button
+  const aiCancelBtn = document.getElementById('ai-modal-cancel');
+  if (aiCancelBtn) {
+    aiCancelBtn.addEventListener('click', hideAIModal);
+  }
+  
+  // AI modal - generate button
+  const aiGenerateBtn = document.getElementById('ai-modal-generate');
+  if (aiGenerateBtn) {
+    aiGenerateBtn.addEventListener('click', () => {
+      const prompt = document.getElementById('ai-prompt-input').value;
+      handleAIRequest(prompt);
+    });
+  }
+  
+  // AI modal - Enter key to submit
+  const aiPromptInput = document.getElementById('ai-prompt-input');
+  if (aiPromptInput) {
+    aiPromptInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        const prompt = aiPromptInput.value;
+        handleAIRequest(prompt);
+      }
+    });
+  }
+  
+  // AI example buttons
+  document.querySelectorAll('.ai-example-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const prompt = btn.dataset.prompt;
+      document.getElementById('ai-prompt-input').value = prompt;
+    });
+  });
+  
+  // AI Setup modal - close button
+  const setupCloseBtn = document.getElementById('ai-setup-cancel');
+  if (setupCloseBtn) {
+    setupCloseBtn.addEventListener('click', hideAISetupModal);
+  }
+  
+  // AI Setup modal - save button
+  const setupSaveBtn = document.getElementById('ai-setup-save');
+  if (setupSaveBtn) {
+    setupSaveBtn.addEventListener('click', async () => {
+      const token = document.getElementById('ai-setup-token-input').value.trim();
+      const model = document.getElementById('ai-setup-model-select').value;
+      
+      if (!token) {
+        alert('Please enter your GitHub token');
+        return;
+      }
+      
+      // Update settings
+      aiSettings.githubToken = token;
+      aiSettings.model = model;
+      aiSettings.enabled = true;
+      
+      // Save to disk
+      await saveAISettings();
+      
+      // Hide setup modal
+      hideAISetupModal();
+      
+      // Show success message and refresh the app
+      alert('AI Assistant configured successfully! 🎉\n\nThe app will now refresh to complete setup.');
+      
+      // Refresh the app to prevent read-only mode issues
+      location.reload();
+    });
+  }
+  
+  // GitHub token link
+  const githubTokenLink = document.getElementById('github-token-link');
+  if (githubTokenLink) {
+    githubTokenLink.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await window.electronAPI.openExternal('https://github.com/settings/tokens/new?description=EmeraldNotes%20AI%20Assistant&scopes=');
+    });
   }
 }
 

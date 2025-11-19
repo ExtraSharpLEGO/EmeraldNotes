@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; img-src 'self' data:; font-src 'self' data: https://fonts.gstatic.com;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; img-src 'self' data:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://models.inference.ai.azure.com;">
   <title>EmeraldNotes</title>
   <!-- Google Fonts for Obsidian-like typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -75,6 +75,11 @@
           <div class="editor-header">
             <input type="text" class="note-title" id="note-title" placeholder="Untitled" readonly>
             <div class="header-actions">
+              <button class="ai-generate-btn" id="ai-assistant-btn" title="AI Assistant">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M14 4.4375C15.3462 4.4375 16.4375 3.34619 16.4375 2H17.5625C17.5625 3.34619 18.6538 4.4375 20 4.4375V5.5625C18.6538 5.5625 17.5625 6.65381 17.5625 8H16.4375C16.4375 6.65381 15.3462 5.5625 14 5.5625V4.4375ZM1 11C4.31371 11 7 8.31371 7 5H9C9 8.31371 11.6863 11 15 11V13C11.6863 13 9 15.6863 9 19H7C7 15.6863 4.31371 13 1 13V11ZM17.25 14C17.25 15.7949 15.7949 17.25 14 17.25V18.75C15.7949 18.75 17.25 20.2051 17.25 22H18.75C18.75 20.2051 20.2051 18.75 22 18.75V17.25C20.2051 17.25 18.75 15.7949 18.75 14H17.25Z"></path>
+                </svg>
+              </button>
               <button class="icon-btn" id="restore-backup-btn" title="Restore from Backup">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path>
@@ -257,6 +262,98 @@
       <div class="table-editor-footer">
         <button class="btn-secondary" id="table-editor-cancel">Cancel</button>
         <button class="btn-primary" id="table-editor-insert">Insert Table</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Assistant Modal -->
+  <div class="modal" id="ai-modal" style="display: none;">
+    <div class="ai-modal-content">
+      <div class="ai-modal-header">
+        <h3>✨ AI Assistant</h3>
+        <button class="icon-btn" id="ai-modal-close" title="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="ai-modal-body">
+        <p class="ai-hint">Ask me to generate or modify markdown content</p>
+        <textarea id="ai-prompt-input" placeholder="e.g., Give me a project plan for a small electron notetaking app" rows="3"></textarea>
+        <div class="ai-examples">
+          <span class="ai-example-label">Examples:</span>
+          <button class="ai-example-btn" data-prompt="Create a project plan for a markdown notes app">Project Plan</button>
+          <button class="ai-example-btn" data-prompt="Add a table comparing 3 programming languages">Add Table</button>
+          <button class="ai-example-btn" data-prompt="Reformat and organize this document">Reorganize</button>
+        </div>
+      </div>
+      <div class="ai-modal-footer">
+        <button class="btn-secondary" id="ai-modal-cancel">Cancel</button>
+        <button class="btn-primary ai-generate-btn" id="ai-modal-generate">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 6px;">
+            <path d="M14 4.4375C15.3462 4.4375 16.4375 3.34619 16.4375 2H17.5625C17.5625 3.34619 18.6538 4.4375 20 4.4375V5.5625C18.6538 5.5625 17.5625 6.65381 17.5625 8H16.4375C16.4375 6.65381 15.3462 5.5625 14 5.5625V4.4375ZM1 11C4.31371 11 7 8.31371 7 5H9C9 8.31371 11.6863 11 15 11V13C11.6863 13 9 15.6863 9 19H7C7 15.6863 4.31371 13 1 13V11ZM17.25 14C17.25 15.7949 15.7949 17.25 14 17.25V18.75C15.7949 18.75 17.25 20.2051 17.25 22H18.75C18.75 20.2051 20.2051 18.75 22 18.75V17.25C20.2051 17.25 18.75 15.7949 18.75 14H17.25Z"></path>
+          </svg>
+          Generate
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Loading Overlay -->
+  <div class="ai-loading-overlay" id="ai-loading-overlay" style="display: none;">
+    <div class="ai-loading-content">
+      <div class="ai-spinner"></div>
+      <p class="ai-loading-text">Generating markdown...</p>
+      <p class="ai-loading-subtext">This may take a few seconds</p>
+    </div>
+  </div>
+
+  <!-- AI Setup Modal -->
+  <div class="modal" id="ai-setup-modal" style="display: none;">
+    <div class="ai-setup-content">
+      <div class="ai-setup-header">
+        <h2>🚀 Setup AI Assistant</h2>
+      </div>
+      <div class="ai-setup-body">
+        <p class="ai-setup-description">To use the AI Assistant, you need a free GitHub token. This gives you access to powerful AI models at no cost!</p>
+        
+        <div class="ai-setup-steps">
+          <div class="ai-setup-step">
+            <span class="ai-step-number">1</span>
+            <div class="ai-step-content">
+              <h4>Get Your Free GitHub Token</h4>
+              <p>Visit <a href="#" id="github-token-link" class="ai-link">github.com/settings/tokens</a></p>
+              <p class="ai-step-detail">Create a new token (Classic) with <strong>no scopes selected</strong> - you only need the basic token!</p>
+            </div>
+          </div>
+          
+          <div class="ai-setup-step">
+            <span class="ai-step-number">2</span>
+            <div class="ai-step-content">
+              <h4>Paste Your Token Below</h4>
+              <input type="password" id="ai-setup-token-input" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" />
+              <p class="ai-step-detail">Your token is stored locally and never shared</p>
+            </div>
+          </div>
+          
+          <div class="ai-setup-step">
+            <span class="ai-step-number">3</span>
+            <div class="ai-step-content">
+              <h4>Choose Your Model</h4>
+              <select id="ai-setup-model-select">
+                <option value="gpt-4o-mini" selected>GPT-4o Mini (Fast & Free)</option>
+                <option value="gpt-4o">GPT-4o (More Capable)</option>
+                <option value="Llama-3.2-90B-Vision-Instruct">Llama 3.2 90B (Open Source)</option>
+                <option value="Phi-3.5-mini-instruct">Phi 3.5 Mini (Lightweight)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="ai-setup-footer">
+        <button class="btn-secondary" id="ai-setup-cancel">Cancel</button>
+        <button class="btn-primary" id="ai-setup-save">Save & Start Using AI</button>
       </div>
     </div>
   </div>

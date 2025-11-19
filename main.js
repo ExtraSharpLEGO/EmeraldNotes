@@ -9,7 +9,14 @@ let backupOnNavigate = new Map(); // Track files that need backup on navigation
 
 // Settings
 let appSettings = {
-  generateSampleDocument: true
+  generateSampleDocument: true,
+  aiAssistant: {
+    enabled: false,
+    githubToken: '',
+    model: 'gpt-4o-mini',
+    maxTokens: 2000,
+    temperature: 0.7
+  }
 };
 
 // Load settings from file
@@ -18,7 +25,13 @@ function loadSettings() {
     const settingsPath = path.join(app.getPath('userData'), 'settings.json');
     if (fsSync.existsSync(settingsPath)) {
       const data = fsSync.readFileSync(settingsPath, 'utf-8');
-      appSettings = { ...appSettings, ...JSON.parse(data) };
+      const loaded = JSON.parse(data);
+      // Merge settings, ensuring aiAssistant structure exists
+      appSettings = {
+        ...appSettings,
+        ...loaded,
+        aiAssistant: { ...appSettings.aiAssistant, ...(loaded.aiAssistant || {}) }
+      };
     }
   } catch (err) {
     console.error('Error loading settings:', err);
@@ -127,6 +140,13 @@ function createWindow() {
     {
       label: 'Settings',
       submenu: [
+        {
+          label: 'AI Assistant Configuration...',
+          click: () => {
+            mainWindow.webContents.send('open-ai-setup');
+          }
+        },
+        { type: 'separator' },
         {
           label: 'Generate Sample Document',
           type: 'checkbox',
@@ -912,5 +932,20 @@ app.on('before-quit', async (event) => {
     
     backupOnNavigate.clear();
     app.quit();
+  }
+});
+
+// AI Assistant IPC handlers
+ipcMain.handle('get-ai-settings', async () => {
+  return { success: true, settings: appSettings.aiAssistant };
+});
+
+ipcMain.handle('save-ai-settings', async (event, aiSettings) => {
+  try {
+    appSettings.aiAssistant = { ...appSettings.aiAssistant, ...aiSettings };
+    saveSettings();
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
   }
 });

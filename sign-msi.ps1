@@ -20,8 +20,8 @@ $msiFile = $msiFiles[0].FullName
 Write-Host "Found MSI file: $msiFile" -ForegroundColor Green
 
 # Find the code signing certificate
-$cert = Get-ChildItem -Path Cert:\CurrentUser\My -CodeSigningCert | 
-    Where-Object { $_.Subject -like "*EmeraldNotes*" } |
+$cert = Get-ChildItem -Path Cert:\CurrentUser\My | 
+    Where-Object { $_.Subject -like "*EmeraldNotes*" -and $_.EnhancedKeyUsageList.FriendlyName -contains "Code Signing" } |
     Select-Object -First 1
 
 if (-not $cert) {

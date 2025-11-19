@@ -20,5 +20,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   showInExplorer: (basePath, relativePath) => ipcRenderer.invoke('show-in-explorer', basePath, relativePath),
   // Menu event listeners
   onShowSessionRestore: (callback) => ipcRenderer.on('show-session-restore', callback),
-  onShowAbout: (callback) => ipcRenderer.on('show-about', callback)
+  onShowAbout: (callback) => ipcRenderer.on('show-about', callback),
+  onOpenAISetup: (callback) => ipcRenderer.on('open-ai-setup', callback),
+  // AI Assistant
+  getAISettings: () => ipcRenderer.invoke('get-ai-settings'),
+  saveAISettings: (aiSettings) => ipcRenderer.invoke('save-ai-settings', aiSettings)
 });
