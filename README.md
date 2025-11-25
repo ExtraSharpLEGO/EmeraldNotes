@@ -2,7 +2,7 @@
 
 A beautiful, feature-rich markdown notes application built with Electron. Dark theme with emerald green accents, real-time preview, and comprehensive backup system.
 
-![Version](https://img.shields.io/badge/version-1.0.4-brightgreen)
+![Version](https://img.shields.io/badge/version-1.0.6-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Electron](https://img.shields.io/badge/electron-39.1.2-blue)
 
@@ -12,7 +12,7 @@ A beautiful, feature-rich markdown notes application built with Electron. Dark t
 
 #### Windows
 1. **Download** the latest release from [GitHub Releases](https://github.com/ExtraSharpLEGO/EmeraldNotes/releases/latest)
-2. **Download** the `EmeraldNotes-1.0.4.msi` installer file
+2. **Download** the `EmeraldNotes-1.0.6.msi` installer file
 3. **Run** the installer by double-clicking the downloaded `.msi` file
 4. **Follow** the installation wizard (no configuration needed!)
 5. **Launch** EmeraldNotes from your Start Menu or Desktop shortcut
@@ -21,7 +21,7 @@ A beautiful, feature-rich markdown notes application built with Electron. Dark t
 
 #### macOS
 1. **Download** the latest release from [GitHub Releases](https://github.com/ExtraSharpLEGO/EmeraldNotes/releases/latest)
-2. **Download** the `EmeraldNotes-1.0.4.dmg` installer file
+2. **Download** the `EmeraldNotes-1.0.6.dmg` installer file
 3. **Open** the DMG file and drag EmeraldNotes to your Applications folder
 4. **Launch** EmeraldNotes from your Applications folder or Launchpad
 
@@ -272,7 +272,22 @@ Potential future enhancements:
 
 ## 📝 Version History
 
-### v1.0.4 (Current)
+### v1.0.6 (Current)
+- **New Feature**: AI Assistant integration powered by GitHub Models
+  - Access GPT-4o-mini and other models directly from the editor
+  - Intelligent content generation, reformatting, and markdown assistance
+  - Seamless API integration with GitHub's AI inference service
+  - Context-aware prompting with insert, append, and replace modes
+  - Configurable via Settings menu with secure token storage
+- **Enhanced**: Markdown preprocessing system for better tilde handling
+- **Improved**: Input event management with flag-based control system
+
+### v1.0.5
+- **Improved**: Enhanced markdown parsing with better special character handling
+- **Enhanced**: Preview panel input event processing
+- **Stability**: Refined contenteditable editor behavior
+
+### v1.0.4
 - **New Feature**: Markdown Cheat Sheet - comprehensive syntax reference accessible via help button (?)
   - Quick reference for headers, emphasis, lists, links, images, code blocks, and more
   - Beautiful modal with dark theme matching app design
