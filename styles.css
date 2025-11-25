@@ -460,6 +460,8 @@ body {
 .markdown-preview a {
   color: var(--accent-green);
   text-decoration: none;
+  cursor: pointer;
+  pointer-events: auto;
 }
 
 .markdown-preview a:hover {
@@ -1375,4 +1377,161 @@ body {
 
 .ai-loading-overlay {
   z-index: 9999;
+}
+
+/* ============================================
+   Mermaid Diagrams
+   ============================================ */
+
+.mermaid-container {
+  background: #1a1a1a;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 16px 0;
+  overflow: hidden;
+  position: relative;
+  min-height: 300px;
+}
+
+.mermaid-viewport {
+  width: 100%;
+  height: 100%;
+  transform-origin: center center;
+  transition: transform 0.1s ease-out;
+  cursor: grab;
+  user-select: none;
+}
+
+.mermaid-viewport:active {
+  cursor: grabbing;
+}
+
+.mermaid-container svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaid-controls {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 10;
+}
+
+.mermaid-zoom-btn {
+  width: 32px;
+  height: 32px;
+  background: #2a2a2a;
+  border: 1px solid #4ade80;
+  color: #4ade80;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.mermaid-zoom-btn:hover {
+  background: #4ade80;
+  color: #000;
+  transform: scale(1.1);
+}
+
+.mermaid-zoom-btn:active {
+  transform: scale(0.95);
+}
+
+.mermaid-zoom-reset {
+  font-size: 16px !important;
+}
+
+/* Override Mermaid default styles for dark theme */
+.mermaid .node rect,
+.mermaid .node circle,
+.mermaid .node ellipse,
+.mermaid .node polygon {
+  fill: #2a2a2a !important;
+  stroke: #4ade80 !important;
+  stroke-width: 2px !important;
+}
+
+.mermaid .node .label,
+.mermaid .nodeLabel {
+  color: #e0e0e0 !important;
+  font-family: 'Inter', system-ui, sans-serif !important;
+}
+
+.mermaid .edgePath .path {
+  stroke: #4ade80 !important;
+  stroke-width: 2px !important;
+}
+
+.mermaid .edgeLabel {
+  background-color: #1a1a1a !important;
+  color: #e0e0e0 !important;
+  padding: 4px 8px !important;
+  border-radius: 4px !important;
+}
+
+.mermaid .cluster rect {
+  fill: #1a1a1a !important;
+  stroke: #3a3a3a !important;
+  stroke-width: 1px !important;
+}
+
+.mermaid .cluster text {
+  fill: #4ade80 !important;
+  font-weight: 600 !important;
+}
+
+/* Flowchart specific styles */
+.mermaid .flowchart-link {
+  stroke: #4ade80 !important;
+  stroke-width: 2px !important;
+}
+
+.mermaid .marker {
+  fill: #4ade80 !important;
+  stroke: #4ade80 !important;
+}
+
+/* Sequence diagram styles */
+.mermaid .actor {
+  fill: #2a2a2a !important;
+  stroke: #4ade80 !important;
+  stroke-width: 2px !important;
+}
+
+.mermaid .activation0,
+.mermaid .activation1,
+.mermaid .activation2 {
+  fill: #3a3a3a !important;
+  stroke: #4ade80 !important;
+}
+
+.mermaid .messageLine0,
+.mermaid .messageLine1 {
+  stroke: #4ade80 !important;
+  stroke-width: 1.5px !important;
+}
+
+/* Make mermaid diagrams non-editable */
+.mermaid-container * {
+  user-select: none;
+  pointer-events: auto;
+}
+
+/* Ensure links inside mermaid and preview are clickable */
+.mermaid-container a,
+.markdown-preview a {
+  pointer-events: auto !important;
+  cursor: pointer !important;
 }

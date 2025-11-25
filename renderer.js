@@ -8,7 +8,8 @@ let state = {
   directoryStructure: null,
   saveTimeout: null,
   renderTimeout: null,
-  ignoreInputCount: 0  // Counter to skip handlePreviewInput during programmatic changes
+  ignoreInputCount: 0,  // Counter to skip handlePreviewInput during programmatic changes
+  skipNextInputEvent: false  // Flag to skip input event after special paste operations
 };
 
 // Initialize the app
@@ -150,6 +151,7 @@ function setupEventListeners() {
   markdownPreview.addEventListener('input', handlePreviewInput);
   markdownPreview.addEventListener('paste', handlePreviewPaste);
   markdownPreview.addEventListener('keydown', handlePreviewKeydown);
+  markdownPreview.addEventListener('beforeinput', handlePreviewBeforeInput);
   
   // Global keyboard shortcuts
   document.addEventListener('keydown', handleGlobalKeydown);
@@ -1049,7 +1051,7 @@ function showAboutModal() {
   
   // Version
   const version = document.createElement('div');
-  version.textContent = 'Version 1.0.4';
+  version.textContent = 'Version 1.0.6';
   version.style.cssText = `
     text-align: center;
     color: #a0a0a0;
@@ -1119,6 +1121,7 @@ function showAboutModal() {
     { name: 'Electron', version: '39.1.2' },
     { name: 'Marked.js', version: 'Markdown Parser' },
     { name: 'Highlight.js', version: 'Syntax Highlighting' },
+    { name: 'Mermaid', version: 'Diagram Rendering' },
     { name: 'DOMPurify', version: 'Security' }
   ];
   
@@ -1942,10 +1945,140 @@ function setupAIListeners() {
 function setupMarkdownRenderer() {
   // Configure marked if available
   if (typeof marked !== 'undefined') {
+    // Helper function to generate slug from text
+    function generateSlug(text) {
+      // Handle undefined or null text
+      if (!text) return '';
+      
+      // If text is an object with text property, extract it
+      if (typeof text === 'object' && text.text) {
+        text = text.text;
+      }
+      
+      // Convert to string and generate slug
+      return String(text)
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s-]/g, '') // Remove special characters
+        .replace(/\s+/g, '-')      // Replace spaces with hyphens
+        .replace(/-+/g, '-');      // Replace multiple hyphens with single hyphen
+    }
+    
+    // Create custom renderer to add IDs to headers
+    const renderer = new marked.Renderer();
+    
+    renderer.heading = function({ text, depth }) {
+      // In newer versions of Marked.js, heading receives an object with text and depth
+      const slug = generateSlug(text);
+      return `<h${depth} id="${slug}">${text}</h${depth}>\n`;
+    };
+    
+    // Custom code renderer to preserve special characters like ~
+    renderer.code = function({ text, lang }) {
+      // text already has special chars preserved by marked's tokenizer
+      // Just pass through to highlight.js without modification
+      const langString = lang ? ` class="language-${lang}"` : '';
+      let highlightedCode = text;
+      
+      if (lang && hljs.getLanguage(lang)) {
+        try {
+          highlightedCode = hljs.highlight(text, { language: lang }).value;
+        } catch (err) {
+          console.error('Highlight error:', err);
+        }
+      } else {
+        try {
+          highlightedCode = hljs.highlightAuto(text).value;
+        } catch (err) {
+          // Fallback to plain text
+          highlightedCode = text;
+        }
+      }
+      
+      return `<pre><code${langString}>${highlightedCode}</code></pre>\n`;
+    };
+    
+    // Custom inline code renderer to preserve special characters like ~
+    renderer.codespan = function({ text }) {
+      // text is already escaped by marked's tokenizer, return as-is
+      return `<code>${text}</code>`;
+    };
+    
+    // Store the original parse function
+    const originalParse = marked.parse;
+    
+    // Override marked.parse to preprocess text and protect single tildes
+    marked.parse = function(src, options) {
+      // Protect single tildes by temporarily replacing them with a placeholder
+      // Only replace single ~, not double ~~
+      let processed = src;
+      
+      // First, protect code blocks (triple backticks) - mark their positions
+      const codeBlockPattern = /```[\s\S]*?```/g;
+      const codeBlocks = [];
+      processed = processed.replace(codeBlockPattern, (match) => {
+        const index = codeBlocks.length;
+        codeBlocks.push(match);
+        return `___CODEBLOCK_${index}___`;
+      });
+      
+      // Protect inline code (single backticks)
+      const inlineCodePattern = /`[^`]+`/g;
+      const inlineCodes = [];
+      processed = processed.replace(inlineCodePattern, (match) => {
+        const index = inlineCodes.length;
+        inlineCodes.push(match);
+        return `___INLINECODE_${index}___`;
+      });
+      
+      // Replace single ~ with a unique placeholder that won't be processed by GFM
+      // We need to handle these cases:
+      // - ~ not followed by ~ (single tilde)
+      // - ~ not preceded by ~ (single tilde)
+      // But preserve ~~ (double tilde for strikethrough)
+      
+      // Use a two-pass approach to be safe
+      // First mark positions of ~~
+      const doubleTildePattern = /~~/g;
+      const doubleTildes = [];
+      processed = processed.replace(doubleTildePattern, (match) => {
+        const index = doubleTildes.length;
+        doubleTildes.push(match);
+        return `___DOUBLETILDE_${index}___`;
+      });
+      
+      // Now all remaining ~ are single tildes - replace them
+      processed = processed.replace(/~/g, '___SINGLETILDE___');
+      
+      // Restore double tildes
+      doubleTildes.forEach((dt, index) => {
+        processed = processed.replace(`___DOUBLETILDE_${index}___`, dt);
+      });
+      
+      // Restore inline code
+      inlineCodes.forEach((code, index) => {
+        processed = processed.replace(`___INLINECODE_${index}___`, code);
+      });
+      
+      // Restore code blocks
+      codeBlocks.forEach((block, index) => {
+        processed = processed.replace(`___CODEBLOCK_${index}___`, block);
+      });
+      
+      // Call original parse with processed text
+      let result = originalParse.call(this, processed, options);
+      
+      // Restore single tildes in the HTML output
+      result = result.replace(/___SINGLETILDE___/g, '~');
+      
+      return result;
+    };
+    
     if (marked.setOptions) {
       marked.setOptions({
         breaks: true,  // Treat single \n as <br>
         gfm: true,  // GitHub Flavored Markdown (includes task lists)
+        renderer: renderer,  // Use custom renderer for header IDs
         highlight: function(code, lang) {
           // Use Highlight.js for syntax highlighting
           if (lang && hljs.getLanguage(lang)) {
@@ -1965,7 +2098,38 @@ function setupMarkdownRenderer() {
       });
     }
     
-    console.log('Marked configured with GFM support and syntax highlighting');
+    console.log('Marked configured with GFM support, syntax highlighting, and custom header ID generation');
+  }
+  
+  // Configure Mermaid if available
+  if (typeof mermaid !== 'undefined') {
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'dark',
+      themeVariables: {
+        primaryColor: '#4ade80',
+        primaryTextColor: '#e0e0e0',
+        primaryBorderColor: '#4ade80',
+        lineColor: '#4ade80',
+        secondaryColor: '#2a2a2a',
+        tertiaryColor: '#1a1a1a',
+        background: '#1a1a1a',
+        mainBkg: '#2a2a2a',
+        secondBkg: '#1a1a1a',
+        textColor: '#e0e0e0',
+        border1: '#3a3a3a',
+        border2: '#4a4a4a',
+        arrowheadColor: '#4ade80',
+        fontFamily: 'Inter, system-ui, sans-serif',
+        fontSize: '14px'
+      },
+      flowchart: {
+        htmlLabels: true,
+        curve: 'basis'
+      },
+      securityLevel: 'loose'
+    });
+    console.log('Mermaid configured with dark theme');
   }
 }
 
@@ -2711,7 +2875,8 @@ function transformMarkdownPatterns(triggeredByEnter = false) {
   
   // Check if text contains triple backticks - if so, DON'T match single backticks yet
   const hasTripleBackticks = text.includes('```');
-  const inlineCodeMatch = !hasTripleBackticks ? text.match(/`(.+?)`(\s|$)/) : null;
+  // Match inline code: `content` - no longer requires space after closing backtick
+  const inlineCodeMatch = !hasTripleBackticks ? text.match(/`([^`]+)`/) : null;
   
   if (boldItalicMatch && !transformed) {
     // Bold and italic
@@ -3151,6 +3316,76 @@ function triggerMarkdownTransform(placeCursorAtEnd = false) {
   }, 50);
 }
 
+function handlePreviewBeforeInput(e) {
+  // This function prevents the browser from auto-formatting content
+  // We want manual markdown syntax, not browser auto-formatting
+  
+  const selection = window.getSelection();
+  if (!selection.rangeCount) return;
+  
+  const range = selection.getRangeAt(0);
+  let currentNode = range.startContainer;
+  
+  // Check if we're inside a <code> element (inline or block code)
+  let codeElement = null;
+  let tempNode = currentNode;
+  while (tempNode && tempNode !== e.target) {
+    if (tempNode.nodeType === Node.ELEMENT_NODE && tempNode.tagName === 'CODE') {
+      codeElement = tempNode;
+      break;
+    }
+    tempNode = tempNode.parentNode;
+  }
+  
+  // If we're inside an existing code element, prevent any formatting
+  if (codeElement) {
+    if (e.inputType && e.inputType.startsWith('format')) {
+      e.preventDefault();
+      return;
+    }
+  }
+  
+  // CRITICAL: Prevent ALL browser auto-formatting (strikethrough, bold, italic, etc.)
+  // We handle markdown formatting ourselves through transformMarkdownPatterns
+  if (e.inputType && e.inputType.startsWith('format')) {
+    e.preventDefault();
+    return;
+  }
+  
+  // Check if we're between backticks (typing inline code that hasn't been formatted yet)
+  // This prevents strikethrough from being applied to ~ while typing `code~with~tildes`
+  if (currentNode.nodeType === Node.TEXT_NODE) {
+    const text = currentNode.textContent;
+    const cursorPos = range.startOffset;
+    
+    // Look for a backtick before the cursor
+    const beforeCursor = text.substring(0, cursorPos);
+    const afterCursor = text.substring(cursorPos);
+    
+    const lastBacktickBefore = beforeCursor.lastIndexOf('`');
+    const firstBacktickAfter = afterCursor.indexOf('`');
+    
+    // If we're between backticks, we're in inline code territory
+    if (lastBacktickBefore !== -1 && firstBacktickAfter !== -1) {
+      // We're between backticks! Don't let browser apply formatting
+      // But we still want to allow the character to be typed
+      return; // Let the character through, but browser shouldn't format it
+    }
+    
+    // Also check if there's an opening backtick and we just typed the closing backtick
+    // In this case, trigger the markdown transform to wrap it in <code>
+    if (e.inputType === 'insertText' && e.data === '`' && lastBacktickBefore !== -1) {
+      // Check if there's no closing backtick yet
+      if (firstBacktickAfter === -1) {
+        // User just typed closing backtick - let it through, then trigger transform
+        setTimeout(() => {
+          transformMarkdownPatterns(false);
+        }, 10);
+      }
+    }
+  }
+}
+
 function handlePreviewInput(e) {
   const preview = e.target;
   
@@ -3158,6 +3393,13 @@ function handlePreviewInput(e) {
   if (state.ignoreInputCount > 0) {
     console.log('Ignoring input event (programmatic change, count:', state.ignoreInputCount, ')');
     state.ignoreInputCount--;
+    return;
+  }
+  
+  // Skip if we just pasted into a code element
+  if (state.skipNextInputEvent) {
+    console.log('Skipping input event after special paste operation');
+    state.skipNextInputEvent = false;
     return;
   }
   
@@ -3237,12 +3479,82 @@ async function handlePreviewPaste(e) {
   if (!hasImage) {
     e.preventDefault();
     const text = e.clipboardData.getData('text/plain');
-    document.execCommand('insertText', false, text);
     
-    // Transform markdown after paste
-    setTimeout(() => {
-      triggerMarkdownTransform();
-    }, 10);
+    // Check if we're pasting inside a <code> element (inline code)
+    const selection = window.getSelection();
+    let insideCode = false;
+    let codeElement = null;
+    
+    if (selection.rangeCount > 0) {
+      let node = selection.getRangeAt(0).startContainer;
+      // Walk up the DOM tree to find if we're inside a <code> element
+      while (node && node !== document.getElementById('markdown-preview')) {
+        if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'CODE') {
+          insideCode = true;
+          codeElement = node;
+          break;
+        }
+        node = node.parentNode;
+      }
+    }
+    
+    if (insideCode) {
+      // SPECIAL HANDLING FOR PASTING INTO CODE ELEMENTS
+      // When pasting into inline code, we need to insert as plain text
+      // and manually insert it into the code element to avoid browser stripping characters
+      console.log('Pasting into code element:', text);
+      console.log('Setting skipNextInputEvent flag to true');
+      
+      // Insert the text directly using a text node
+      const textNode = document.createTextNode(text);
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(textNode);
+      
+      // Move cursor to end of inserted text
+      range.setStartAfter(textNode);
+      range.setEndAfter(textNode);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      
+      // Set flag to skip the next input event
+      // This prevents handlePreviewInput from triggering and calling htmlToMarkdown
+      state.skipNextInputEvent = true;
+      
+      // CRITICAL: Do NOT call triggerMarkdownTransform() or any conversion
+      // The code element now has the correct text content with tildes preserved
+      // Just trigger a delayed save directly from the DOM
+      setTimeout(() => {
+        const preview = document.getElementById('markdown-preview');
+        const markdown = htmlToMarkdown(preview);
+        
+        // Update the hidden textarea
+        const markdownInput = document.getElementById('markdown-input');
+        markdownInput.value = markdown;
+        
+        // Save the file
+        clearTimeout(state.saveTimeout);
+        state.saveTimeout = setTimeout(() => {
+          saveCurrentFile(markdown);
+        }, 500);
+      }, 100);
+    } else {
+      // CRITICAL: Do NOT use insertText - use insertHTML to prevent browser auto-formatting
+      // We need to escape the text to prevent the browser from interpreting it as markdown
+      
+      // Create a text node and append it to a temporary div to get properly escaped HTML
+      const tempDiv = document.createElement('div');
+      tempDiv.textContent = text; // This escapes HTML entities
+      const escapedHTML = tempDiv.innerHTML;
+      
+      // Insert the escaped HTML (which is just plain text with entities escaped)
+      document.execCommand('insertHTML', false, escapedHTML);
+      
+      // Transform markdown after paste
+      setTimeout(() => {
+        triggerMarkdownTransform();
+      }, 10);
+    }
   }
 }
 
@@ -3350,6 +3662,7 @@ async function handleImageInsert(file) {
           
           setTimeout(() => {
             preview.contentEditable = 'true';
+            preview.classList.add('editable');
             
             // Restore cursor position after the image
             const images = preview.querySelectorAll('img');
@@ -3424,7 +3737,22 @@ function htmlToMarkdown(element) {
         case 'b': return `**${children}**`;
         case 'em':
         case 'i': return `*${children}*`;
-        case 'code': return node.parentElement.tagName === 'PRE' ? children : `\`${children}\``;
+        case 'del':
+        case 's':
+        case 'strike': return `~~${children}~~`;
+        case 'code': {
+          // For inline code (not inside PRE), preserve special characters like ~ by escaping
+          if (node.parentElement.tagName === 'PRE') {
+            // For code blocks, return as-is (will be wrapped by PRE case)
+            return children;
+          } else {
+            // For inline code, get the raw text content directly from the node
+            // This ensures we capture all characters including tildes
+            const codeText = node.textContent || '';
+            console.log('Inline code htmlToMarkdown - node.textContent:', codeText, 'children:', children);
+            return `\`${codeText}\``;
+          }
+        }
         case 'pre': {
           // Check if code element has a language class
           const codeElement = node.querySelector('code');
@@ -3435,6 +3763,7 @@ function htmlToMarkdown(element) {
               lang = match[1];
             }
           }
+          // Return code block content as-is (special characters like ~ are preserved)
           return `\`\`\`${lang}\n${children}\n\`\`\`\n`;
         }
         case 'a': return `[${children}](${node.getAttribute('href') || ''})`;
@@ -3540,6 +3869,15 @@ function htmlToMarkdown(element) {
           // These are handled by the table case
           return children;
         case 'div':
+          // Handle mermaid diagrams - convert back to code block
+          if (node.classList.contains('mermaid-container')) {
+            const originalCode = node.getAttribute('data-mermaid-code');
+            if (originalCode) {
+              return `\`\`\`mermaid\n${originalCode}\n\`\`\`\n`;
+            }
+            // Fallback: skip if no original code stored
+            return '';
+          }
           // Skip code-language-selector but process its children
           if (node.classList.contains('code-language-selector')) {
             return '';
@@ -3635,6 +3973,9 @@ function renderMarkdownPreview(markdown, forceRender = false) {
   // Set the HTML
   preview.innerHTML = html;
   
+  // Render Mermaid diagrams
+  renderMermaidDiagrams();
+  
   // Add event listeners to all checkboxes (marked already created them)
   attachCheckboxListeners();
   
@@ -3646,6 +3987,278 @@ function renderMarkdownPreview(markdown, forceRender = false) {
   
   // Add language selectors to code blocks
   addCodeBlockLanguageSelectors();
+}
+
+// Render Mermaid diagrams
+function renderMermaidDiagrams() {
+  if (typeof mermaid === 'undefined') {
+    return;
+  }
+  
+  const preview = document.getElementById('markdown-preview');
+  const mermaidBlocks = preview.querySelectorAll('code.language-mermaid');
+  
+  mermaidBlocks.forEach((block, index) => {
+    try {
+      // Get the mermaid code
+      const code = block.textContent;
+      
+      // Create a unique ID for this diagram
+      const id = `mermaid-diagram-${Date.now()}-${index}`;
+      
+      // Create a container for the diagram
+      const container = document.createElement('div');
+      container.className = 'mermaid-container';
+      container.setAttribute('data-mermaid-code', code); // Store original code for markdown conversion
+      container.style.cssText = `
+        background: #1a1a1a;
+        border: 1px solid #3a3a3a;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 16px 0;
+        overflow: hidden;
+        position: relative;
+      `;
+      
+      // Create viewport wrapper for pan/zoom
+      const viewport = document.createElement('div');
+      viewport.className = 'mermaid-viewport';
+      viewport.style.cssText = `
+        width: 100%;
+        height: 100%;
+        transform-origin: center center;
+        transition: transform 0.1s ease-out;
+        cursor: grab;
+      `;
+      
+      // Create the mermaid div
+      const mermaidDiv = document.createElement('div');
+      mermaidDiv.className = 'mermaid';
+      mermaidDiv.id = id;
+      mermaidDiv.textContent = code;
+      
+      viewport.appendChild(mermaidDiv);
+      container.appendChild(viewport);
+      
+      // Create zoom controls
+      const controls = document.createElement('div');
+      controls.className = 'mermaid-controls';
+      controls.style.cssText = `
+        position: absolute;
+        bottom: 12px;
+        right: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        z-index: 10;
+      `;
+      controls.innerHTML = `
+        <button class="mermaid-zoom-btn mermaid-zoom-in" title="Zoom In" style="
+          width: 32px;
+          height: 32px;
+          background: #2a2a2a;
+          border: 1px solid #4ade80;
+          color: #4ade80;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 18px;
+          font-weight: bold;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+        ">+</button>
+        <button class="mermaid-zoom-btn mermaid-zoom-out" title="Zoom Out" style="
+          width: 32px;
+          height: 32px;
+          background: #2a2a2a;
+          border: 1px solid #4ade80;
+          color: #4ade80;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 18px;
+          font-weight: bold;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+        ">−</button>
+        <button class="mermaid-zoom-btn mermaid-zoom-reset" title="Reset Zoom" style="
+          width: 32px;
+          height: 32px;
+          background: #2a2a2a;
+          border: 1px solid #4ade80;
+          color: #4ade80;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 16px;
+          font-weight: bold;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+        ">⟲</button>
+      `;
+      container.appendChild(controls);
+      
+      // Replace the code block with the container
+      const pre = block.parentElement;
+      if (pre && pre.tagName === 'PRE') {
+        pre.parentElement.replaceChild(container, pre);
+      }
+      
+      // Render the diagram
+      mermaid.run({
+        nodes: [mermaidDiv]
+      }).then(() => {
+        // Initialize zoom and pan after render
+        initializeMermaidInteractivity(container, viewport);
+      }).catch(err => {
+        console.error('Mermaid render error:', err);
+        container.innerHTML = `
+          <div style="color: #ef4444; padding: 12px; background: #2a1a1a; border-radius: 6px;">
+            <strong>⚠️ Mermaid Diagram Error:</strong><br>
+            <code style="color: #fca5a5; font-size: 12px;">${err.message || 'Failed to render diagram'}</code>
+          </div>
+        `;
+      });
+    } catch (err) {
+      console.error('Error processing mermaid block:', err);
+    }
+  });
+}
+
+// Initialize zoom and pan functionality for Mermaid diagrams
+function initializeMermaidInteractivity(container, viewport) {
+  let scale = 1;
+  let translateX = 0;
+  let translateY = 0;
+  let isPanning = false;
+  let startX = 0;
+  let startY = 0;
+  
+  const minScale = 0.5;
+  const maxScale = 3;
+  const zoomStep = 0.2;
+  
+  function updateTransform() {
+    viewport.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+  }
+  
+  function zoomIn() {
+    if (scale < maxScale) {
+      scale = Math.min(scale + zoomStep, maxScale);
+      updateTransform();
+    }
+  }
+  
+  function zoomOut() {
+    if (scale > minScale) {
+      scale = Math.max(scale - zoomStep, minScale);
+      updateTransform();
+    }
+  }
+  
+  function resetZoom() {
+    scale = 1;
+    translateX = 0;
+    translateY = 0;
+    updateTransform();
+  }
+  
+  // Zoom buttons
+  const zoomInBtn = container.querySelector('.mermaid-zoom-in');
+  const zoomOutBtn = container.querySelector('.mermaid-zoom-out');
+  const resetBtn = container.querySelector('.mermaid-zoom-reset');
+  
+  if (zoomInBtn) {
+    zoomInBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      zoomIn();
+    });
+    zoomInBtn.addEventListener('mouseenter', (e) => {
+      e.target.style.background = '#4ade80';
+      e.target.style.color = '#000';
+    });
+    zoomInBtn.addEventListener('mouseleave', (e) => {
+      e.target.style.background = '#2a2a2a';
+      e.target.style.color = '#4ade80';
+    });
+  }
+  
+  if (zoomOutBtn) {
+    zoomOutBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      zoomOut();
+    });
+    zoomOutBtn.addEventListener('mouseenter', (e) => {
+      e.target.style.background = '#4ade80';
+      e.target.style.color = '#000';
+    });
+    zoomOutBtn.addEventListener('mouseleave', (e) => {
+      e.target.style.background = '#2a2a2a';
+      e.target.style.color = '#4ade80';
+    });
+  }
+  
+  if (resetBtn) {
+    resetBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      resetZoom();
+    });
+    resetBtn.addEventListener('mouseenter', (e) => {
+      e.target.style.background = '#4ade80';
+      e.target.style.color = '#000';
+    });
+    resetBtn.addEventListener('mouseleave', (e) => {
+      e.target.style.background = '#2a2a2a';
+      e.target.style.color = '#4ade80';
+    });
+  }
+  
+  // Mouse wheel zoom
+  container.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (e.deltaY < 0) {
+      zoomIn();
+    } else {
+      zoomOut();
+    }
+  }, { passive: false });
+  
+  // Pan with mouse drag
+  viewport.addEventListener('mousedown', (e) => {
+    // Only pan if not clicking on interactive elements or buttons
+    if (e.target.tagName === 'A' || e.target.closest('a') || 
+        e.target.classList.contains('mermaid-zoom-btn') ||
+        e.target.closest('.mermaid-zoom-btn')) {
+      return;
+    }
+    
+    isPanning = true;
+    startX = e.clientX - translateX;
+    startY = e.clientY - translateY;
+    viewport.style.cursor = 'grabbing';
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  
+  document.addEventListener('mousemove', (e) => {
+    if (!isPanning) return;
+    
+    translateX = e.clientX - startX;
+    translateY = e.clientY - startY;
+    updateTransform();
+  });
+  
+  document.addEventListener('mouseup', () => {
+    if (isPanning) {
+      isPanning = false;
+      viewport.style.cursor = 'grab';
+    }
+  });
 }
 
 // Make images resizable
@@ -3753,11 +4366,71 @@ function makeLinksExternal() {
     const newLink = link.cloneNode(true);
     link.parentNode.replaceChild(newLink, link);
     
+    // Make link non-editable when preview is editable
+    newLink.contentEditable = 'false';
+    newLink.style.cursor = 'pointer';
+    newLink.style.pointerEvents = 'auto';
+    
     newLink.addEventListener('click', (e) => {
       e.preventDefault();
+      e.stopPropagation();
       const href = newLink.getAttribute('href');
+      
+      // Handle external links
       if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
         window.electronAPI.openExternal(href);
+      }
+      // Handle internal anchor links (Table of Contents)
+      else if (href && href.startsWith('#')) {
+        // Normalize the target ID to match the slug generation in setupMarkdownRenderer
+        const rawTargetId = href.substring(1);
+        const normalizedTargetId = rawTargetId
+          .toLowerCase()
+          .trim()
+          .replace(/[^\w\s-]/g, '') // Remove special characters
+          .replace(/\s+/g, '-')      // Replace spaces with hyphens
+          .replace(/-+/g, '-');      // Replace multiple hyphens with single hyphen
+        
+        // Try to find the target with normalized ID
+        let targetElement = preview.querySelector(`[id="${normalizedTargetId}"]`);
+        
+        // Fallback: try the original ID as-is
+        if (!targetElement) {
+          targetElement = preview.querySelector(`[id="${rawTargetId}"]`);
+        }
+        
+        // Debug: Log what we're looking for and what's available
+        if (!targetElement) {
+          console.log('Target not found:', normalizedTargetId, '(original:', rawTargetId + ')');
+          console.log('Available IDs:', Array.from(preview.querySelectorAll('[id]')).map(el => el.id));
+        }
+        
+        if (targetElement) {
+          // Get the position of the target element relative to the preview container
+          const targetOffset = targetElement.offsetTop;
+          
+          // Smooth scroll the preview container to the target
+          preview.scrollTo({
+            top: targetOffset - 20, // 20px offset from top for better visibility
+            behavior: 'smooth'
+          });
+          
+          // Flash the target element to show where we scrolled to
+          const originalBackground = targetElement.style.background;
+          const originalTransition = targetElement.style.transition;
+          
+          targetElement.style.background = 'rgba(74, 222, 128, 0.2)';
+          targetElement.style.transition = 'background 0.3s ease';
+          
+          setTimeout(() => {
+            targetElement.style.background = originalBackground;
+            setTimeout(() => {
+              targetElement.style.transition = originalTransition;
+            }, 300);
+          }, 1000);
+        } else {
+          console.warn('Could not find target element for anchor:', href);
+        }
       }
     });
   });
